@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>Peek-a-Shape i18n scan</title>
+<link rel="stylesheet" href="../css/styles.css" />
+<style>
+  #scan { position: fixed; left: 0; top: 0; right: 0; z-index: 9999; max-height: 60vh; overflow: auto;
+    background: #101820; color: #dfe8f0; font: 12px ui-monospace, Menlo, monospace; padding: 10px; white-space: pre-wrap; }
+  #scan .f { color: #ff7b72; } #scan .p { color: #7ee787; }
+</style>
+</head>
+<body>
+  <div id="scan">running…</div>
+
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">🎲 <span class="zh" id="brand-name">立體探秘樂</span></div>
+      <div class="spacer"></div>
+      <nav class="modes">
+        <button class="pill home" id="btn-home">主頁</button>
+      </nav>
+      <button class="pill lang" id="btn-lang">EN</button>
+    </header>
+    <div id="main">
+      <div id="stage-wrap" style="position:relative;flex:1 1 64%;min-width:0;min-height:0;display:flex;">
+        <div id="stage"></div>
+      </div>
+      <aside id="panel"></aside>
+    </div>
+  </div>
+
+  <script src="../lib/three.min.js"></script>
+  <script src="../js/geometry.js"></script>
+  <script src="../js/clip.js"></script>
+  <script src="../js/nets.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/viewer.js"></script>
+  <script src="../js/app.js"></script>
+
+  <script>
+  (function () {
+    'use strict';
+    var A = PS.app, T = PS.i18n, st = A.state;
+    var IDS = ['cube', 'cuboid', 'triPrism', 'quadPrism', 'pentaPrism', 'hexaPrism',
+      'triPyramid', 'quadPyramid', 'pentaPyramid', 'cylinder', 'cone', 'sphere'];
+    var CJK = /[\u3400-\u9FFF\uF900-\uFAFF]/;
+    var issues = [];
+
+    // 掃描面板 / 舞台標籤 / 提示 / 好友對話，找出英文模式下殘留的中文
+    function scanCJK(where) {
+      var nodes = [
+        document.getElementById('panel'),
+        document.querySelector('#stage .stage-label')
+      ];
+      nodes.forEach(function (n) {
+        if (!n) return;
+        var txt = n.textContent || '';
+        if (CJK.test(txt)) issues.push(where + ' CJK: ' + txt.replace(/\s+/g, ' ').trim().slice(0, 90));
+      });
+    }
+    function scanBrand(lang) {
+      var b = document.getElementById('brand-name');
+      var t = b ? b.textContent : '';
+      if (lang === 'en' && CJK.test(t)) issues.push('EN brand still Chinese: ' + t);
+      if (lang === 'zh' && !CJK.test(t)) issues.push('ZH brand not Chinese: ' + t);
+    }
+    // 中文模式：面板不應出現純英文句子（品牌與 EN 按鈕除外）
+    function scanLatinLen(where) {
+      var n = document.getElementById('panel');
+      if (!n) return;
+      var txt = (n.textContent || '').replace(/\s+/g, ' ').trim();
+      // 若整段一個中文字都沒有，就當作沒切換到中文
+      if (txt && !CJK.test(txt)) issues.push(where + ' not Chinese: ' + txt.slice(0, 90));
+    }
+
+    function run() {
+      var Q = A._test;
+
+      // 1) 英文模式：每個模組 × 每個立體
+      T.setLang('en');
+      ['inspect', 'unfold', 'cut'].forEach(function (mode) {
+        Q.go(mode);
+        IDS.forEach(function (id) {
+          st.shape = id; Q.render();
+          scanCJK('EN ' + mode + ' ' + id);
+        });
+      });
+      // 首頁
+      Q.go('home'); scanCJK('EN home');
+
+      // 2) 英文模式：展開圖考驗（配對 / 不能摺）
+      Q.go('unfold'); st.shape = 'cube';
+      for (var i = 0; i < 6; i++) {
+        st.unfold.quiz = null; Q.render(); Q.newUnfoldQuiz();
+        scanCJK('EN unfold quiz#' + i);
+        st.unfold.quiz.answered = true; st.unfold.quiz.chosen = 0; Q.render();
+        scanCJK('EN unfold quiz#' + i + ' answered');
+      }
+      // 3) 英文模式：切割三種題型
+      Q.go('cut'); st.shape = 'cube';
+      for (var j = 0; j < 30; j++) {
+        st.cut.quiz = null; Q.newCutQuiz();
+        var q = st.cut.quiz;
+        scanCJK('EN cut quiz ' + q.type);
+        if (q.type !== 'target' && q.options) {
+          st.cut.quiz.answered = true; st.cut.quiz.chosen = 0; Q.render();
+          scanCJK('EN cut quiz ' + q.type + ' answered');
+        } else if (q.type === 'target' && q.answered) {
+          Q.render(); scanCJK('EN cut target done');
+        }
+      }
+
+      // 4) 中文模式：每個模組
+      T.setLang('zh');
+      ['inspect', 'unfold', 'cut'].forEach(function (mode) {
+        Q.go(mode);
+        IDS.forEach(function (id) { st.shape = id; Q.render(); scanLatinLen('ZH ' + mode + ' ' + id); });
+      });
+
+      // 5) 導覽列：語言切換鈕顯示「另一個語言」的名稱（正確行為），主頁鈕要跟隨語言
+      T.setLang('en');
+      scanBrand('en');
+      var bh = document.getElementById('btn-home').textContent;
+      var bl = document.getElementById('btn-lang').textContent;
+      if (CJK.test(bh)) issues.push('EN home button still Chinese: ' + bh);
+      if (bl !== '中文') issues.push('EN lang button should offer 中文: ' + bl);
+      T.setLang('zh');
+      scanBrand('zh');
+      bh = document.getElementById('btn-home').textContent;
+      bl = document.getElementById('btn-lang').textContent;
+      if (bh !== '主頁') issues.push('ZH home button wrong: ' + bh);
+      if (bl !== 'English') issues.push('ZH lang button should offer English: ' + bl);
+
+      // 作為診斷，輸出答案鍵的中文/英文長度統計
+      var DICT = T.DICT, bad = [];
+      Object.keys(DICT).forEach(function (k) {
+        var e = DICT[k];
+        if (!e.zh || !e.en) bad.push('missing ' + k);
+      });
+
+      var el = document.getElementById('scan');
+      var head = 'SCAN: ' + issues.length + ' issues' + (bad.length ? ', ' + bad.length + ' dict problems' : '');
+      el.innerHTML = '<h2 class="' + (issues.length ? 'f' : 'p') + '">' + head + '</h2>' +
+        issues.slice(0, 80).map(function (s) { return '<div class="f">• ' + s + '</div>'; }).join('') +
+        bad.slice(0, 20).map(function (s) { return '<div class="f">• ' + s + '</div>'; }).join('');
+    }
+
+    if (document.readyState === 'complete') setTimeout(run, 0);
+    else window.addEventListener('load', function () { setTimeout(run, 0); });
+  })();
+  </script>
+</body>
+</html>

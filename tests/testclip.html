@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><title>Clip Test</title></head>
+<body>
+  <pre id="out"></pre>
+  <script src="../js/geometry.js"></script>
+  <script src="../js/clip.js"></script>
+  <script>
+    var out = document.getElementById('out');
+    function log(s){ out.textContent += s + '\n'; }
+    try {
+      var s = PS.geo.getSolid('cube');
+      var r = PS.clip.clipSolid(s, PS.clip.makePlane([0,1,0],[0,0,0]));
+      log(r.ok + ' ' + (r.reason||''));
+      for (var y=-0.6; y<=0.6; y+=0.1) {
+        r = PS.clip.clipSolid(s, PS.clip.makePlane([0,1,0],[0,y,0]));
+        if (r.ok) log('hit ' + y);
+      }
+      log('done');
+    } catch(e) { log('ERR:'+e); }
+  </script>
+</body>
+</html>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Peek-a-Shape 冒煙測試</title>
+<link rel="stylesheet" href="../css/styles.css" />
+<style>
+  #smoke { position: fixed; left: 0; top: 0; right: 0; z-index: 9999; max-height: 45vh; overflow: auto;
+    background: #101820; color: #dfe8f0; font: 12px ui-monospace, Menlo, monospace; padding: 10px; }
+  #smoke .p { color: #7ee787; } #smoke .f { color: #ff7b72; } #smoke h2 { font-size: 14px; margin: 0 0 6px; }
+</style>
+</head>
+<body>
+  <div id="smoke">running…</div>
+
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">🎲 <span class="zh" id="brand-name">立體探秘樂</span></div>
+      <div class="spacer"></div>
+      <nav class="modes">
+        <button class="pill home" id="btn-home">主頁</button>
+      </nav>
+      <button class="pill lang" id="btn-lang">EN</button>
+    </header>
+    <div id="main">
+      <div id="stage-wrap" style="position:relative;flex:1 1 64%;min-width:0;min-height:0;display:flex;">
+        <div id="stage"></div>
+      </div>
+      <aside id="panel"></aside>
+    </div>
+  </div>
+
+  <script>
+    window.__SMOKE_ERRORS__ = [];
+    window.addEventListener('error', function (e) {
+      window.__SMOKE_ERRORS__.push('window.onerror: ' + (e.message || e.error) + ' @ ' + e.lineno + ':' + e.colno);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      window.__SMOKE_ERRORS__.push('unhandledrejection: ' + e.reason);
+    });
+  </script>
+
+  <script src="../lib/three.min.js"></script>
+  <script src="../js/geometry.js"></script>
+  <script src="../js/clip.js"></script>
+  <script src="../js/nets.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/viewer.js"></script>
+  <script src="../js/app.js"></script>
+
+  <script>
+  (function () {
+    'use strict';
+    var ERRORS = window.__SMOKE_ERRORS__;
+    var results = [];
+    function check(name, fn) {
+      try { fn(); results.push({ name: name, pass: true }); }
+      catch (e) { results.push({ name: name, pass: false, msg: (e && e.message) ? e.message : String(e) }); }
+    }
+    var IDS = ['cube','cuboid','triPrism','quadPrism','pentaPrism','hexaPrism',
+      'triPyramid','quadPyramid','pentaPyramid','cylinder','cone','sphere'];
+
+    function finish() {
+      var pass = results.filter(function (r) { return r.pass; }).length;
+      var fail = results.length - pass;
+      var el = document.getElementById('smoke');
+      var html = '<h2>SMOKE: ' + results.length + ' checks — ' + pass + ' pass, ' + fail + ' fail; ' +
+        'runtime errors: ' + ERRORS.length + '</h2>';
+      results.forEach(function (r) {
+        html += '<div class="' + (r.pass ? 'p' : 'f') + '">' + (r.pass ? 'PASS ' : 'FAIL ') + r.name +
+          (r.msg ? ' — ' + r.msg : '') + '</div>';
+      });
+      ERRORS.forEach(function (m) { html += '<div class="f">ERR ' + m + '</div>'; });
+      el.innerHTML = html;
+      window.__SMOKE_RESULTS__ = results;
+      window.__SMOKE_SUMMARY__ = { total: results.length, pass: pass, fail: fail, errors: ERRORS.length };
+    }
+
+    function run() {
+      try { runInner(); } catch (e) { ERRORS.push('run threw: ' + ((e && e.stack) || e)); }
+      finish();
+    }
+
+    function runInner() {
+      var A = PS.app, st = A.state, T = PS.i18n, V = PS.V, G = PS.geo, C = PS.clip;
+      var viewer = A._test.getViewer();
+
+      check('app initialised (viewer created)', function () { if (!viewer) throw new Error('viewer is null'); });
+      check('no runtime errors during init', function () { if (ERRORS.length) throw new Error(ERRORS.length + ' errors'); });
+
+      // 1. 三個模組 × 全部立體，都能渲染
+      ['inspect', 'unfold', 'cut'].forEach(function (mode) {
+        check('go(' + mode + ')', function () { A._test.go(mode); });
+        IDS.forEach(function (id) {
+          check(mode + ' render ' + id, function () {
+            st.shape = id;
+            A._test.render();
+            if (!document.getElementById('panel').childNodes.length) throw new Error('empty panel');
+          });
+        });
+      });
+
+      // 2. 觀察：開關
+      check('inspect toggles', function () {
+        A._test.go('inspect'); st.shape = 'cylinder';
+        st.inspect.edges = true; st.inspect.verts = true; st.inspect.auto = true; A._test.render();
+        st.inspect.edges = false; st.inspect.verts = false; st.inspect.auto = false; A._test.render();
+      });
+
+      // 3. 展開：變體 + 滑桿事件 + 對應 + 題目
+      check('unfold variant cycle + slider', function () {
+        A._test.go('unfold'); st.shape = 'cube'; st.unfold.variant = 0; st.unfold.t = 0; A._test.render();
+        // 用滑桿事件
+        var rng = document.querySelector('#panel .slider');
+        if (!rng) throw new Error('no fold slider');
+        rng.value = 60; rng.dispatchEvent(new Event('input'));
+        if (Math.abs(st.unfold.t - 0.6) > 1e-6) throw new Error('slider did not set t=' + st.unfold.t);
+        // 變體按鈕
+        var before = st.unfold.variant;
+        var btn = document.querySelector('#panel .btn.ghost.block');
+        if (btn) { btn.click(); if (st.unfold.variant === before) throw new Error('variant did not change'); }
+      });
+
+      check('unfold pick group renders', function () {
+        A._test.go('unfold'); st.shape = 'cube'; st.unfold.pickGroup = 0; A._test.render();
+        st.unfold.pickGroup = -1; A._test.render();
+      });
+
+      // 展開圖按鈕：要顯示百分比例，並跟隨滑桿更新
+      check('unfold auto button follows percentage', function () {
+        A._test.go('unfold'); st.shape = 'cube'; st.unfold.t = 0; A._test.render();
+        var btn = document.getElementById('btn-auto-fold');
+        if (!btn) throw new Error('no auto-fold button');
+        if (!/\(\d+%\)/.test(btn.textContent)) throw new Error('no percentage on button: ' + btn.textContent);
+        if (!/\(0%\)/.test(btn.textContent)) throw new Error('expected 0%: ' + btn.textContent);
+        var rng = document.querySelector('#panel .slider');
+        rng.value = '60';
+        rng.dispatchEvent(new Event('input', { bubbles: true }));
+        var pct = document.querySelector('#panel .pct');
+        if (pct.textContent !== '60%') throw new Error('pct not updated: ' + pct.textContent);
+        if (!/\(60%\)/.test(btn.textContent)) throw new Error('button pct not updated: ' + btn.textContent);
+        st.unfold.t = 0; A._test.render();
+      });
+
+      // 展開圖考驗：多跑幾次，逐一選項作答
+      for (var u = 0; u < 8; u++) {
+        check('unfold quiz #' + (u + 1), function () {
+          A._test.go('unfold'); st.shape = 'cube'; st.unfold.quiz = null; A._test.render();
+          A._test.newUnfoldQuiz();
+          var q = st.unfold.quiz;
+          if (!q || !q.options || q.options.length !== 3) throw new Error('bad quiz options');
+          var correct = q.options.filter(function (o) { return o.correct; }).length;
+          var valid = q.options.filter(function (o) { return o.res && o.res.ok; }).length;
+          if (correct !== 1) throw new Error(q.type + ' should have exactly 1 correct answer, got ' + correct);
+          if (q.type === 'match' && valid !== 1) throw new Error('match should have 1 foldable option, got ' + valid);
+          if (q.type === 'invalid' && valid !== 2) throw new Error('invalid should have 2 foldable options, got ' + valid);
+          // 逐一作答（每個選項都測，重新生成題目）
+          for (var i = 0; i < 3; i++) {
+            A._test.newUnfoldQuiz();
+            A._test.answerUnfold(i);
+            if (!st.unfold.quiz.answered) throw new Error('not marked answered');
+          }
+        });
+      }
+
+      // 4. 切割：所有模式 + 切割 + 印章 + 題型
+      check('cut all modes', function () {
+        A._test.go('cut'); st.shape = 'cube';
+        ['horizontal', 'vertical', 'slant', 'diagonal'].forEach(function (m) {
+          st.cut.mode = m; st.cut.showResult = false; A._test.render();
+        });
+      });
+
+      check('cut controls: angle only for slant, position always; no free mode', function () {
+        A._test.go('cut'); st.shape = 'cube'; st.cut.showResult = false;
+        function panelText() { return document.getElementById('panel').textContent; }
+        function sliderCount() { return document.querySelectorAll('#panel .slider').length; }
+        // 自由角度按鈕已移除
+        if (/自由角度|Free angle/.test(panelText())) throw new Error('free-angle chip still present');
+        // 水平切 / 垂直切 / 對角切：只有位置滑桿（1 條），沒有角度滑桿
+        ['horizontal', 'vertical', 'diagonal'].forEach(function (m) {
+          st.cut.mode = m; A._test.render();
+          if (sliderCount() !== 1) throw new Error(m + ' should have only the position slider, got ' + sliderCount());
+          if (/角度|Angle/.test(panelText())) throw new Error(m + ' should not show an angle control');
+        });
+        // 斜切：角度 + 位置（2 條）
+        st.cut.mode = 'slant'; A._test.render();
+        if (sliderCount() !== 2) throw new Error('slant should have angle + position sliders, got ' + sliderCount());
+        // 對角切是固定 45° 對角平面
+        st.cut.mode = 'diagonal'; st.cut.pos = 0; st.cut.showResult = false; A._test.render();
+        var dplane = st.cut.plane;
+        var nrm = dplane && dplane.n ? dplane.n : null;
+        if (!nrm || Math.abs(Math.abs(nrm[0]) - Math.abs(nrm[1])) > 1e-6 || Math.abs(nrm[2]) > 1e-6) {
+          throw new Error('diagonal normal should be [±1,±1,0], got ' + JSON.stringify(nrm));
+        }
+        st.cut.mode = 'horizontal'; st.cut.pos = 0; A._test.render();
+      });
+
+      check('cut perform + separation + stamp', function () {
+        A._test.go('cut'); st.shape = 'cube';
+        st.cut.mode = 'horizontal'; st.cut.pos = 0; st.cut.angle = 40; st.cut.showResult = false;
+        A._test.render();
+        A._test.doCut();
+        if (!st.cut.showResult) throw new Error('cut not applied');
+        if (!st.cut.section) throw new Error('no section computed');
+        // 2D 印章
+        var cv = document.createElement('canvas'); cv.width = 360; cv.height = 360;
+        A._test.drawStamp(cv, st.cut.section, 20, 1.2);
+      });
+
+      check('cut candidates + section keys for all solids', function () {
+        IDS.forEach(function (id) {
+          var solid = G.getSolid(id);
+          var cands = A._test.candidateCuts(solid);
+          cands.forEach(function (c) {
+            if (!C.SHAPE_NAME[c.key]) throw new Error('unknown shape key ' + c.key + ' for ' + id);
+          });
+        });
+      });
+
+      check('cut quiz all three types, every option', function () {
+        A._test.go('cut'); st.shape = 'cube';
+        var seen = {};
+        for (var n = 0; n < 30; n++) {
+          st.cut.quiz = null;
+          A._test.newCutQuiz();
+          var q = st.cut.quiz;
+          if (!q) throw new Error('no quiz');
+          seen[q.type] = (seen[q.type] || 0) + 1;
+          if (q.type === 'target') {
+            // 用幾何方法解出目標：找一個候選切法，其 key 與目標相符
+            var solid = G.getSolid(st.shape);
+            var cands = A._test.candidateCuts(solid);
+            var solved = null;
+            cands.forEach(function (c) { if (A._test.targetMatch(q.target, c.key)) solved = c; });
+            if (solved) {
+              st.cut.mode = solved.mode; st.cut.pos = solved.pos; st.cut.angle = 40;
+              A._test.render();
+              if (!st.cut.quiz.answered) throw new Error('target not detected as solved for ' + q.target);
+            }
+          } else {
+            for (var i = 0; i < q.options.length; i++) {
+              st.cut.quiz = null; A._test.newCutQuiz();
+              var qq = st.cut.quiz;
+              if (qq.type === 'target') continue;
+              A._test.answerCut(Math.min(i, qq.options.length - 1));
+              if (!st.cut.quiz.answered) throw new Error('cut quiz not answered');
+            }
+          }
+        }
+        if (!seen.match || !seen.judge || !seen.target) throw new Error('did not observe all quiz types: ' + JSON.stringify(seen));
+      });
+
+      // 5. 語言切換：切到英文後每個模組、每個立體都要能渲染
+      check('home text follows language switch', function () {
+        A._test.go('home');
+        T.setLang('en');
+        var t = document.querySelector('#home .hcard .t');
+        if (!t) throw new Error('no home card title');
+        if (/[\u3400-\u9FFF]/.test(t.textContent)) throw new Error('home still Chinese after EN: ' + t.textContent);
+        if (!/[A-Za-z]/.test(t.textContent)) throw new Error('home not English: ' + t.textContent);
+        T.setLang('zh');
+        var t2 = document.querySelector('#home .hcard .t');
+        if (!/[\u3400-\u9FFF]/.test(t2.textContent)) throw new Error('home not back to Chinese: ' + t2.textContent);
+        var thumbs = document.querySelectorAll('#home .thumb3d canvas');
+        if (thumbs.length !== 3) throw new Error('expected 3 home 3D thumbnails, got ' + thumbs.length);
+      });
+      check('switch to EN and render everything', function () {
+        T.setLang('en');
+        ['inspect', 'unfold', 'cut'].forEach(function (mode) {
+          A._test.go(mode);
+          IDS.forEach(function (id) { st.shape = id; A._test.render(); });
+        });
+        var btn = document.getElementById('btn-lang');
+        if (!btn.textContent) throw new Error('lang button empty');
+      });
+      check('switch back to ZH and render everything', function () {
+        T.setLang('zh');
+        ['inspect', 'unfold', 'cut'].forEach(function (mode) {
+          A._test.go(mode);
+          IDS.forEach(function (id) { st.shape = id; A._test.render(); });
+        });
+      });
+
+      // 5b. 主頁滿版：主頁時隱藏面板、舞台滿寬；進入模組後回復左右分欄
+      check('home fills full width, panel hidden; modules split', function () {
+        A._test.go('home');
+        var wrap = document.getElementById('stage-wrap');
+        var panel = document.getElementById('panel');
+        if (panel.style.display !== 'none') throw new Error('panel should be hidden on home');
+        if (wrap.style.flex.indexOf('100%') < 0) throw new Error('stage should be full width on home: ' + wrap.style.flex);
+        var cards = document.querySelectorAll('#home .hcard');
+        if (cards.length !== 3) throw new Error('expected 3 home cards, got ' + cards.length);
+        A._test.go('inspect');
+        if (panel.style.display !== 'block') throw new Error('panel should show in module');
+        if (wrap.style.flex.indexOf('64%') < 0) throw new Error('stage should be ~64% in module: ' + wrap.style.flex);
+      });
+
+      // 頂欄只保留主頁與語言切換
+      check('topbar has only home + language buttons', function () {
+        var pills = document.querySelectorAll('#topbar .pill');
+        if (pills.length !== 2) throw new Error('expected 2 topbar pills, got ' + pills.length);
+        var modes = document.querySelectorAll('#topbar [data-mode]');
+        if (modes.length !== 0) throw new Error('mode buttons should be removed');
+      });
+
+      // 6. 真實 DOM 點擊（事件處理）
+      check('DOM clicks: topbar buttons', function () {
+        document.getElementById('btn-lang').click();
+        document.getElementById('btn-lang').click();
+        document.getElementById('btn-home').click();
+        Array.prototype.forEach.call(document.querySelectorAll('#topbar [data-mode]'), function (b) { b.click(); });
+      });
+      check('DOM clicks: solid chips + next/quiz buttons', function () {
+        A._test.go('inspect');
+        var chips = document.querySelectorAll('#panel .chip');
+        if (!chips.length) throw new Error('no chips');
+        for (var i = 0; i < chips.length; i++) chips[i].click();
+        A._test.go('unfold');
+        var chips2 = document.querySelectorAll('#panel .chip');
+        for (var j = 0; j < chips2.length; j++) chips2[j].click();
+        A._test.go('cut');
+        var chips3 = document.querySelectorAll('#panel .chip');
+        for (var k = 0; k < chips3.length; k++) chips3[k].click();
+      });
+
+      // 7. 觀察：透視模式 + 計數機（面半透明綠、棱藍、頂點黃）
+      check('inspect xray toggle + overlays', function () {
+        A._test.go('inspect'); st.shape = 'cube'; st.inspect.xray = false;
+        st.inspect.edges = false; st.inspect.verts = false; A._test.render();
+        var v = A._test.getViewer();
+        var btns = document.querySelectorAll('#panel .big-toggle.alt');
+        var found = false;
+        Array.prototype.forEach.call(btns, function (b) {
+          if (/X-Ray|透視|棱和頂點|edges/i.test(b.textContent)) { found = true; b.click(); }
+        });
+        if (!found) throw new Error('no X-Ray toggle button');
+        if (!st.inspect.xray) throw new Error('xray state not enabled');
+        if (v.xray !== true) throw new Error('viewer xray not applied');
+        if (!v.solidMesh || v.solidMesh.material.transparent !== true) throw new Error('solid not transparent in xray');
+        if (v.overlay.visible !== true) throw new Error('edges/vertices should auto-show in xray');
+        // 關閉
+        Array.prototype.forEach.call(document.querySelectorAll('#panel .big-toggle.alt'), function (b) {
+          if (/X-Ray|透視|棱和頂點|edges/i.test(b.textContent)) b.click();
+        });
+        if (st.inspect.xray !== false || v.xray !== false) throw new Error('xray did not turn off');
+      });
+
+      check('inspect click-to-count sequence + highlight overlay', function () {
+        A._test.go('inspect'); st.shape = 'cube'; st.inspect.counted = {}; st.inspect.order = []; st.inspect._shape = 'cube';
+        A._test.render();
+        A._test.onPick({ type: 'face', group: 0 });
+        A._test.onPick({ type: 'face', group: 1 });
+        var v = A._test.getViewer();
+        if (!v.hlGroup || v.hlGroup.children.length !== 2) throw new Error('highlight overlay faces wrong: ' + (v.hlGroup ? v.hlGroup.children.length : 'null'));
+        if (v.hlGroup.children[0].material.transparent !== true || v.hlGroup.children[0].material.opacity >= 1) throw new Error('highlight not semi-transparent green');
+        st.inspect.counted = {}; st.inspect.order = []; A._test.render();
+      });
+
+      check('cut module independent from inspect X-Ray', function () {
+        var v = A._test.getViewer();
+        // 在觀察模組開啟 X-Ray
+        A._test.go('inspect'); st.shape = 'cube'; st.inspect.xray = true; A._test.render();
+        if (v.xray !== true) throw new Error('inspect xray should be on');
+        // 進入切割：不可有 X-Ray 按鈕，且不可繼承半透明狀態
+        A._test.go('cut'); st.shape = 'cube'; A._test.render();
+        var btns = document.querySelectorAll('#panel .big-toggle.alt');
+        var hasXr = false;
+        Array.prototype.forEach.call(btns, function (b) { if (/X-Ray|透視|棱和頂點|edges/i.test(b.textContent)) hasXr = true; });
+        if (hasXr) throw new Error('cut module should not show an X-Ray button');
+        if (v.xray !== false) throw new Error('cut should not inherit xray');
+        if (v.solidMesh && v.solidMesh.material.transparent) throw new Error('cut solid should be opaque');
+        // 回到觀察：應記住原本的 X-Ray 狀態
+        A._test.go('inspect'); A._test.render();
+        if (v.xray !== true) throw new Error('inspect should remember xray state');
+        st.inspect.xray = false; A._test.render();
+      });
+
+      check('cut position slider is draggable (no panel rebuild)', function () {
+        A._test.go('cut'); st.shape = 'cube'; st.cut.mode = 'horizontal'; st.cut.pos = 0; st.cut.showResult = false;
+        A._test.render();
+        var inputs = document.querySelectorAll('#panel .slider');
+        if (inputs.length < 1) throw new Error('expected a position slider, got ' + inputs.length);
+        var posInp = inputs[inputs.length - 1];
+        posInp.value = '40';
+        posInp.dispatchEvent(new Event('input', { bubbles: true }));
+        if (Math.abs(st.cut.pos - 0.4) > 1e-6) throw new Error('position not updated: ' + st.cut.pos);
+        // 拖動後不應重建面板（同一個滑桿節點仍在文件內，才能繼續拖）
+        if (!posInp.isConnected) throw new Error('panel rebuilt during drag (slider detached)');
+        // 仍在同一個面板，且預覽平面已更新
+        if (!st.cut.plane) throw new Error('cut plane not updated');
+        // 檢查已移除的兩顆按鈕
+        var panelTxt = document.getElementById('panel').textContent;
+        if (/預覽切割平面|Preview cutting plane|一步一步切|Step by step/.test(panelTxt)) throw new Error('removed buttons still present');
+        st.cut.pos = 0; A._test.render();
+      });
+
+      check('AI chat box (Cube Buddy) removed', function () {
+        if (document.getElementById('buddy')) throw new Error('#buddy chat box still present');
+        if (document.querySelector('#stage .bubble')) throw new Error('chat bubble still present');
+        // 各模組都不應出現鼓勵氣泡
+        ['inspect', 'unfold', 'cut'].forEach(function (v) {
+          A._test.go(v); A._test.render();
+          if (document.querySelector('#stage .bubble')) throw new Error('bubble visible in ' + v);
+        });
+      });
+
+      check('no runtime errors during tests', function () { if (ERRORS.length) throw new Error(ERRORS.length + ' errors: ' + ERRORS[0]); });
+    }
+
+    if (document.readyState === 'complete') setTimeout(run, 0);
+    else window.addEventListener('load', function () { setTimeout(run, 0); });
+  })();
+  </script>
+</body>
+</html>

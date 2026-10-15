@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><title>imgprobe</title></head>
+<body>
+<div id="out">loading…</div>
+<script>
+(function () {
+  function params() {
+    var o = {}, h = location.hash.replace(/^#/, '');
+    h.split('&').forEach(function (kv) { var a = kv.split('='); o[a[0]] = decodeURIComponent(a[1] || ''); });
+    return o;
+  }
+  var p = params();
+  var img = new Image();
+  img.onload = function () {
+    var c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    var ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    var d;
+    try { d = ctx.getImageData(0, 0, c.width, c.height).data; }
+    catch (e) { document.getElementById('out').textContent = 'TAINTED: ' + e.message; return; }
+    var W = c.width, H = c.height;
+    var SW = Math.floor(W * 0.62), SH = Math.floor(H * 0.88);
+    var stageColor = 0, sMinx = W, sMiny = H, sMaxx = 0, sMaxy = 0;
+    var rs = 0, gs = 0, bs = 0, cn = 0;
+    var vivid = 0, vMinx = W, vMiny = H, vMaxx = 0, vMaxy = 0, vrs = 0, vgs = 0, vbs = 0, vcn = 0;
+    var dark = 0;
+    for (var y = 0; y < SH; y++) {
+      for (var x = 0; x < SW; x++) {
+        var i = (y * W + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+        var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        if (mx < 90) dark++;
+        if (mx - mn > 45 && !(r > 235 && g > 235 && b > 235)) {
+          stageColor++;
+          if (x < sMinx) sMinx = x; if (y < sMiny) sMiny = y;
+          if (x > sMaxx) sMaxx = x; if (y > sMaxy) sMaxy = y;
+          rs += r; gs += g; bs += b; cn++;
+        }
+        if (mx - mn > 90 && mx > 110) {
+          vivid++;
+          if (x < vMinx) vMinx = x; if (y < vMiny) vMiny = y;
+          if (x > vMaxx) vMaxx = x; if (y > vMaxy) vMaxy = y;
+          vrs += r; vgs += g; vbs += b; vcn++;
+        }
+      }
+    }
+    var stageArea = SW * SH;
+    var res = {
+      size: W + 'x' + H,
+      stageColorfulPct: (100 * stageColor / stageArea).toFixed(2),
+      stageColorBBox: [sMinx, sMiny, sMaxx, sMaxy],
+      avgColor: cn ? [Math.round(rs / cn), Math.round(gs / cn), Math.round(bs / cn)] : null,
+      vividPct: (100 * vivid / stageArea).toFixed(2),
+      vividBBox: vivid ? [vMinx, vMiny, vMaxx, vMaxy] : null,
+      vividBBoxPx: vivid ? ((vMaxx - vMinx) + 'x' + (vMaxy - vMiny)) : null,
+      vividAvg: vcn ? [Math.round(vrs / vcn), Math.round(vgs / vcn), Math.round(vbs / vcn)] : null
+    };
+    document.getElementById('out').textContent = JSON.stringify(res);
+    window.__IMGPROBE__ = res;
+  };
+  img.onerror = function () { document.getElementById('out').textContent = 'LOAD FAILED: ' + p.img; };
+  img.src = p.img;
+})();
+</script>
+</body>
+</html>

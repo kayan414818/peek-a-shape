@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><title>ascii</title></head>
+<body>
+<pre id="out">loading…</pre>
+<script>
+(function () {
+  function params() {
+    var o = {}, h = location.hash.replace(/^#/, '');
+    h.split('&').forEach(function (kv) { var a = kv.split('='); o[a[0]] = decodeURIComponent(a[1] || ''); });
+    return o;
+  }
+  var PAL = [
+    ['B', 0x4ea8f2], ['O', 0xffb84d], ['G', 0x8bd17c], ['P', 0xb98cff], ['K', 0xff8fab],
+    ['T', 0x59d3c8], ['Y', 0xffd400], ['H', 0x9be36a], ['U', 0xc46bff], ['N', 0xff7fd0],
+    ['A', 0xffc2a0], ['E', 0xffe066], ['L', 0x9ad0ff], ['F', 0xff9f7f], ['C', 0xc5e86c], ['D', 0xf2a4d8]
+  ];
+  function classify(r, g, b) {
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mn > 232) return ' ';                        // near white
+    // pale cyan/blue page background
+    if (b >= r && b >= g && (b - r) >= 12 && (b - r) <= 80 && (g - r) >= -5 && mx >= 210) return ' ';
+    if (mx - mn < 35) return mx < 120 ? '#' : ' ';   // grey/dark edge or bg
+    var best = '?', bd = 1e9;
+    PAL.forEach(function (p) {
+      var cr = (p[1] >> 16) & 255, cg = (p[1] >> 8) & 255, cb = p[1] & 255;
+      var d = (r - cr) * (r - cr) * 0.9 + (g - cg) * (g - cg) * 1.2 + (b - cb) * (b - cb) * 0.9;
+      if (d < bd) { bd = d; best = p[0]; }
+    });
+    return best;
+  }
+  var p = params();
+  var cols = parseInt(p.cols || '104', 10), rows = parseInt(p.rows || '40', 10);
+  var img = new Image();
+  img.onload = function () {
+    var c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    var ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+    var data;
+    try { data = ctx.getImageData(0, 0, c.width, c.height).data; }
+    catch (e) { document.getElementById('out').textContent = 'TAINTED: ' + e.message; return; }
+    var W = c.width, H = c.height;
+    var W = c.width, H = c.height;
+    var rx = p.rx !== undefined ? parseFloat(p.rx) : 0;
+    var ry = parseFloat(p.ry || '0');
+    var rw = parseFloat(p.rw || '0.62');
+    var rh = parseFloat(p.rh || '0.9');
+    var SW = Math.floor(W * rw), SH = Math.floor(H * rh);
+    var OX = Math.floor(W * rx), OY = Math.floor(H * ry);
+    var lines = [];
+    for (var ry2 = 0; ry2 < rows; ry2++) {
+      var line = '';
+      for (var rx2 = 0; rx2 < cols; rx2++) {
+        var x0 = OX + Math.floor(rx2 * SW / cols), x1 = OX + Math.floor((rx2 + 1) * SW / cols);
+        var y0 = OY + Math.floor(ry2 * SH / rows), y1 = OY + Math.floor((ry2 + 1) * SH / rows);
+        var rs = 0, gs = 0, bs = 0, n = 0;
+        for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) {
+          var i = (y * W + x) * 4; rs += data[i]; gs += data[i + 1]; bs += data[i + 2]; n++;
+        }
+        line += classify(rs / n, gs / n, bs / n);
+      }
+      lines.push(line);
+    }
+    document.getElementById('out').innerHTML = lines.map(function (l) {
+      return l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/ /g, '\u00a0');
+    }).join('<br/>');
+    window.__ASCII__ = lines.join('\n');
+  };
+  img.onerror = function () { document.getElementById('out').textContent = 'LOAD FAILED: ' + p.img; };
+  img.src = p.img;
+})();
+</script>
+</body>
+</html>

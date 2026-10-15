@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><title>dbgfold</title></head>
+<body>
+<div id="stage" style="width:300px;height:300px"></div>
+<pre id="out">…</pre>
+<script src="../lib/three.min.js"></script>
+<script src="../js/geometry.js"></script>
+<script src="../js/clip.js"></script>
+<script src="../js/nets.js"></script>
+<script src="../js/i18n.js"></script>
+<script src="../js/viewer.js"></script>
+<script>
+(function () {
+  var log = [];
+  try {
+    var net = PS.nets.build('cube', 0);
+    log.push('net.kind=' + net.kind + ' cells=' + net.cells.length + ' variants=' + PS.nets.variants('cube'));
+    net.cells.forEach(function (c) {
+      var p0 = c.poly[0], p1 = c.poly[2] || c.poly[1];
+      var w0 = net.warp(c.id, 0.45, [p0[0], p0[1], 0]);
+      var w1 = net.warp(c.id, 0.45, [p1[0], p1[1], 0]);
+      log.push('cell ' + c.id + ' type=' + c.type + ' grp=' + c.group +
+        ' flat=' + JSON.stringify(p0) + ' fold0=' + JSON.stringify(w0.map(function(v){return +v.toFixed(3);})) +
+        ' fold1=' + JSON.stringify(w1.map(function(v) { return +v.toFixed(3); })));
+    });
+    var st = document.getElementById('stage');
+    var v = new PS.Viewer(st);
+    v.showNet(net, 0.45);
+    log.push('cellMeshes=' + v.cellMeshes.length + ' meshes=' + v.meshes.length + ' foldT=' + v.foldT);
+    // bounding box of geometry
+    var mn = [1e9,1e9,1e9], mx = [-1e9,-1e9,-1e9], any = false;
+    v._content.traverse(function (n) {
+      if (n.geometry && n.geometry.getAttribute) {
+        var a = n.geometry.getAttribute('position');
+        for (var i = 0; i < a.count; i++) { any = true;
+          var x = a.getX(i), y = a.getY(i), z = a.getZ(i);
+          if (x<mn[0])mn[0]=x; if(y<mn[1])mn[1]=y; if(z<mn[2])mn[2]=z;
+          if (x>mx[0])mx[0]=x; if(y>mx[1])mx[1]=y; if(z>mx[2])mx[2]=z;
+        }
+      }
+    });
+    log.push('bbox=' + JSON.stringify(log && [mn.map(function(v){return +v.toFixed(2);}), mx.map(function(v){return +v.toFixed(2);})]));
+    log.push('stage size=' + document.getElementById('stage').clientWidth + 'x' + document.getElementById('stage').clientHeight);
+  } catch (e) { log.push('ERR ' + (e && e.stack || e)); }
+  document.getElementById('out').textContent = log.join('\n');
+})();
+</script>
+</body></html>

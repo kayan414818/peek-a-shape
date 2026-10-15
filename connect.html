@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>用手機／平板開啟 Peek-a-Shape｜立體探秘樂</title>
+<style>
+  :root {
+    --sky: #bfe6ff;
+    --sky2: #e8f6ff;
+    --ink: #2b3a55;
+    --yellow: #ffd54a;
+    --orange: #ff9d4d;
+    --green: #7ed957;
+    --purple: #b98cff;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background: linear-gradient(160deg, var(--sky) 0%, var(--sky2) 60%, #ffffff 100%);
+    min-height: 100vh;
+    padding: 28px 18px 60px;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    font-size: clamp(22px, 4vw, 34px);
+    margin: 8px 0 4px;
+    letter-spacing: .5px;
+  }
+  h1 .en { display: block; font-size: .6em; font-weight: 600; opacity: .75; margin-top: 6px; }
+  .sub { text-align: center; font-size: 15px; opacity: .8; margin: 0 0 26px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 22px;
+    padding: 20px 18px 16px;
+    box-shadow: 0 10px 0 rgba(43,58,85,.12), 0 14px 30px rgba(43,58,85,.14);
+    border: 3px solid #ffffff;
+    text-align: center;
+  }
+  .card.best { border-color: var(--green); }
+  .tag {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--green);
+    color: #14401a;
+    margin-bottom: 10px;
+  }
+  .tag.alt { background: var(--purple); color: #2a1350; }
+  .tag.desk { background: var(--yellow); color: #5a4300; }
+  .card h2 { font-size: 17px; margin: 2px 0 2px; }
+  .card h2 .en { display: block; font-size: 12px; font-weight: 600; opacity: .65; }
+  .qr { margin: 14px auto 8px; width: 100%; max-width: 220px; }
+  .qr svg, .qr img, .qr table { width: 100%; height: auto; display: block; margin: 0 auto; }
+  .url {
+    display: inline-block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 15px;
+    font-weight: 700;
+    background: var(--sky2);
+    border: 2px dashed #9cc9ee;
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin-top: 4px;
+    word-break: break-all;
+  }
+  .note { font-size: 13px; opacity: .75; margin-top: 8px; line-height: 1.5; }
+  .steps {
+    margin: 30px auto 0;
+    background: #fffdf3;
+    border: 3px solid var(--yellow);
+    border-radius: 22px;
+    padding: 18px 22px;
+    box-shadow: 0 10px 0 rgba(43,58,85,.10);
+  }
+  .steps h3 { margin: 0 0 10px; font-size: 16px; }
+  .steps ol { margin: 0; padding-left: 22px; }
+  .steps li { margin: 7px 0; line-height: 1.55; font-size: 14.5px; }
+  .pick { text-align: center; margin: 0 0 22px; font-size: 14px; }
+  .pick a {
+    color: #1b5fbf;
+    font-weight: 700;
+    text-decoration: none;
+    background: #ffffff;
+    padding: 6px 14px;
+    border-radius: 999px;
+    display: inline-block;
+    margin: 4px 6px;
+    box-shadow: 0 4px 0 rgba(43,58,85,.12);
+  }
+  .top { text-align: center; margin-bottom: 10px; }
+  .top a {
+    font-weight: 700; text-decoration: none; color: var(--ink);
+    background: var(--orange); color: #3a1e00;
+    padding: 9px 20px; border-radius: 999px;
+    box-shadow: 0 5px 0 rgba(43,58,85,.18);
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← 返回 Peek-a-Shape</a></div>
+  <h1>用手機／平板開啟
+    <span class="en">Open on your phone / tablet</span>
+  </h1>
+  <p class="sub">請確保手機／平板與這台電腦連接<b>同一個 Wi‑Fi</b>，然後用相機掃描下面的 QR 碼。<br>
+    <span style="opacity:.8">Make sure your device is on the <b>same Wi‑Fi</b>, then scan a QR code with the camera.</span></p>
+
+  <div class="pick" id="pick"></div>
+
+  <div class="grid">
+    <div class="card best" id="cardIp">
+      <span class="tag">建議・任何裝置</span>
+      <h2>用 Wi‑Fi 位址開啟<span class="en">Wi‑Fi address (any device)</span></h2>
+      <div class="qr" id="qrIp"></div>
+      <div class="url" id="urlIp">—</div>
+      <div class="note">iPhone、iPad、Android、電腦都可用。<br>Works on iPhone, iPad, Android, and computers.</div>
+    </div>
+
+    <div class="card" id="cardLocal">
+      <span class="tag alt">Apple 裝置</span>
+      <h2>用 Bonjour 名稱開啟<span class="en">Bonjour name (Apple devices)</span></h2>
+      <div class="qr" id="qrLocal"></div>
+      <div class="url">http://peekashape.local/</div>
+      <div class="note">iPhone／iPad／Mac 通常可直接開啟。<br>Usually works directly on iPhone / iPad / Mac.</div>
+    </div>
+
+    <div class="card" id="cardDesk">
+      <span class="tag desk">這台電腦</span>
+      <h2>在這台電腦開啟<span class="en">Open on this computer</span></h2>
+      <div class="qr" id="qrDesk"></div>
+      <div class="url">http://peekashape.com/</div>
+      <div class="note">只在這台 Mac 生效。<br>Works only on this Mac.</div>
+    </div>
+  </div>
+
+  <div class="steps">
+    <h3>使用步驟 · How to use</h3>
+    <ol>
+      <li>打開手機／平板的「相機」App，對準 QR 碼。<br><span style="opacity:.75">Open the Camera app and point it at a QR code.</span></li>
+      <li>點出現的連結，就會在瀏覽器打開立體探秘樂。<br><span style="opacity:.75">Tap the link that appears to open the app in the browser.</span></li>
+      <li>把這個網址「加入主畫面」，就像 App 一樣方便。<br><span style="opacity:.75">Use “Add to Home Screen” for one‑tap access.</span></li>
+    </ol>
+  </div>
+</div>
+
+<script src="js/vendor/qrcode.js"></script>
+<script>
+(function () {
+  function param(name) {
+    var m = new RegExp('[?&]' + name + '=([^&]+)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  // Work out the best Wi-Fi address to offer.
+  var ip = param('ip');
+  if (!ip) {
+    var h = location.hostname;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) ip = h;
+  }
+
+  var deskUrl = 'http://peekashape.com/';
+  var localUrl = 'http://peekashape.local/';
+  var ipUrl = ip ? ('http://' + ip + '/') : null;
+
+  function draw(elId, url) {
+    var el = document.getElementById(elId);
+    if (!el || !url) { return; }
+    var qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    el.innerHTML = qr.createSvgTag({ cellSize: 8, margin: 4, scalable: true });
+  }
+
+  if (ipUrl) {
+    document.getElementById('urlIp').textContent = ipUrl;
+    draw('qrIp', ipUrl);
+    draw('qrDesk', deskUrl);
+  } else {
+    // No Wi-Fi IP known: hide the IP card and highlight Bonjour instead.
+    document.getElementById('cardIp').style.display = 'none';
+    document.getElementById('qrDesk').parentNode.style.display = 'none';
+  }
+
+  draw('qrLocal', localUrl);
+
+  // Quick links at the top.
+  var pick = document.getElementById('pick');
+  var links = [];
+  if (ipUrl) links.push({ u: ipUrl, t: 'Wi‑Fi 位址' });
+  links.push({ u: localUrl, t: 'Bonjour' });
+  links.push({ u: deskUrl, t: '這台電腦' });
+  pick.innerHTML = links.map(function (l) {
+    return '<a href="' + l.u + '">' + l.t + '：' + l.u + '</a>';
+  }).join('');
+})();
+</script>
+</body>
+</html>

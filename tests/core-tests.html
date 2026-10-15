@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Peek-a-Shape 核心測試</title>
+<style>
+  body { font-family: ui-monospace, Menlo, Consolas, monospace; margin: 16px; background: #0f1720; color: #dfe8f0; }
+  h1 { font-size: 18px; }
+  #summary { font-size: 16px; font-weight: 700; margin: 8px 0 14px; }
+  .ok { color: #7ee787; } .bad { color: #ff7b72; }
+  .row { padding: 3px 0; border-bottom: 1px solid #1d2b39; }
+  .msg { color: #9aa7b3; font-size: 12px; }
+  details { margin-top: 14px; }
+</style>
+</head>
+<body>
+<h1>Peek-a-Shape｜核心測試（幾何 / 切割 / 截面 / 展開圖）</h1>
+<div id="summary">running…</div>
+<div id="out"></div>
+
+<script src="../js/geometry.js"></script>
+<script src="../js/clip.js"></script>
+<script src="../js/nets.js"></script>
+<script>
+(function () {
+  'use strict';
+  var results = [];
+  function ok(name, cond, msg) { results.push({ name: name, pass: !!cond, msg: msg || '' }); }
+  function near(a, b, tol) { return Math.abs(a - b) <= (tol === undefined ? 1e-3 : tol); }
+
+  var V = PS.V, G = PS.geo, C = PS.clip, N = PS.nets;
+  var IDS = ['cube', 'cuboid', 'triPrism', 'quadPrism', 'pentaPrism', 'hexaPrism',
+    'triPyramid', 'quadPyramid', 'pentaPyramid', 'cylinder', 'cone', 'sphere'];
+
+  /* ---------- 1. 幾何基本 ---------- */
+  IDS.forEach(function (id) {
+    var s = G.getSolid(id);
+    var info = G.info(id);
+    var vol = G.volume(s.faces);
+    ok('volume > 0：' + id, vol > 0, 'V=' + vol.toFixed(4));
+    if (s.kind === 'poly') {
+      var topo = G.topology(s.faces);
+      ok('topology faces：' + id, s.faces.length === info.counts.faces,
+        s.faces.length + ' vs ' + info.counts.faces);
+      ok('topology edges：' + id, topo.edges.length === info.counts.edges,
+        topo.edges.length + ' vs ' + info.counts.edges);
+      ok('topology vertices：' + id, topo.verts.length === info.counts.vertices,
+        topo.verts.length + ' vs ' + info.counts.vertices);
+    }
+  });
+
+  /* ---------- 2. 切割 + 截面判定 ---------- */
+  function cut(solidId, normal, point) {
+    var s = G.getSolid(solidId);
+    var pl = C.makePlane(normal, point);
+    var r = C.clipSolid(s, pl);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    var sec = C.classifySection(s, r.section.pts, pl);
+    return { ok: true, res: r, sec: sec };
+  }
+
+  // 正方體
+  var r;
+  r = cut('cube', [0, 1, 0], [0, 0, 0]);
+  ok('cube 水平切 → square', r.ok && r.sec.key === 'square', r.ok ? r.sec.key : r.reason);
+  r = cut('cube', [1, 1, 0], [0, 0, 0]);
+  ok('cube 對角切 → rectangle', r.ok && (r.sec.key === 'rectangle' || r.sec.key === 'square'), r.ok ? r.sec.key : r.reason);
+  r = cut('cube', [1, 1, 1], [0.5, 0.5, 0.5]);
+  ok('cube 角切 → triangle', r.ok && /triangle/i.test(r.sec.key), r.ok ? r.sec.key : r.reason);
+  r = cut('cube', [1, 1, 1], [0, 0, 0]);
+  ok('cube 過中心切 [1,1,1] → hexagon', r.ok && r.sec.key === 'hexagon', r.ok ? r.sec.key : r.reason);
+  r = cut('cube', [0, 0, 1], [0, 0, 0]);
+  ok('cube 垂直切 → square', r.ok && r.sec.key === 'square', r.ok ? r.sec.key : r.reason);
+
+  // 其他多面體
+  r = cut('cuboid', [0, 1, 0], [0, 0, 0]);
+  ok('cuboid 水平切 → rectangle', r.ok && r.sec.key === 'rectangle', r.ok ? r.sec.key : r.reason);
+  r = cut('triPrism', [0, 1, 0], [0, 0, 0]);
+  ok('triPrism 水平切 → triangle', r.ok && /triangle/i.test(r.sec.key), r.ok ? r.sec.key : r.reason);
+  r = cut('triPrism', [0, 0, 1], [0, 0, 0]);
+  ok('triPrism 垂直切 → rectangle', r.ok && /rectangle|square/.test(r.sec.key), r.ok ? r.sec.key : r.reason);
+  r = cut('hexaPrism', [0, 1, 0], [0, 0, 0]);
+  ok('hexaPrism 水平切 → hexagon', r.ok && r.sec.key === 'hexagon', r.ok ? r.sec.key : r.reason);
+  r = cut('hexaPrism', [1, 0, 0], [0, 0, 0]);
+  ok('hexaPrism 垂直切 → rectangle', r.ok && /rectangle|square/.test(r.sec.key), r.ok ? r.sec.key : r.reason);
+  r = cut('quadPyramid', [0, 1, 0], [0, -0.3, 0]);
+  ok('quadPyramid 水平切 → square', r.ok && (r.sec.key === 'square' || r.sec.key === 'rectangle'), r.ok ? r.sec.key : r.reason);
+  r = cut('quadPyramid', [0, 1, 0], [0, 0.8, 0]);
+  ok('quadPyramid 近頂切 → 小四邊形', r.ok && (r.sec.key === 'square' || r.sec.key === 'rectangle' || r.sec.key === 'quadrilateral'), r.ok ? r.sec.key : r.reason);
+
+  // 曲面體
+  r = cut('cylinder', [0, 1, 0], [0, 0, 0]);
+  ok('cylinder 水平切 → circle', r.ok && r.sec.key === 'circle', r.ok ? r.sec.key : r.reason);
+  r = cut('cylinder', [1, 0, 0], [0, 0, 0]);
+  ok('cylinder 沿軸切 → rectangle/square', r.ok && /rectangle|square/.test(r.sec.key), r.ok ? r.sec.key : r.reason);
+  r = cut('cone', [0, 1, 0], [0, -0.4, 0]);
+  ok('cone 水平切 → circle', r.ok && r.sec.key === 'circle', r.ok ? r.sec.key : r.reason);
+  r = cut('cone', [0, 1, 0], [0, 0.9, 0]);
+  ok('cone 近頂水平切 → circle', r.ok && r.sec.key === 'circle', r.ok ? r.sec.key : r.reason);
+  r = cut('sphere', [1, 0, 0], [0, 0, 0]);
+  ok('sphere 切 → circle', r.ok && r.sec.key === 'circle', r.ok ? r.sec.key : r.reason);
+  r = cut('sphere', [1, 2, 3], [0, 0, 0]);
+  ok('sphere 任意切 → circle', r.ok && r.sec.key === 'circle', r.ok ? r.sec.key : r.reason);
+
+  // 切不到
+  r = cut('cube', [0, 1, 0], [0, 5, 0]);
+  ok('cube 遠處平面 → 切不到 (miss)', !r.ok && r.reason === 'miss', r.ok ? r.sec.key : r.reason);
+
+  // 兩塊幾何：體積守恆
+  IDS.forEach(function (id) {
+    var s = G.getSolid(id);
+    var pl = C.makePlane([0.3, 1, 0.2], [0, 0, 0]);
+    var rr = C.clipSolid(s, pl);
+    if (!rr.ok) { ok('體積守恆：' + id, false, 'cut miss'); return; }
+    var va = G.volume(rr.A.faces), vb = G.volume(rr.B.faces), vt = G.volume(s.faces);
+    ok('體積守恆 A+B≈V：' + id, near(va + vb, vt, 2e-2),
+      (va + vb).toFixed(4) + ' vs ' + vt.toFixed(4));
+    ok('兩塊都非空：' + id, va > 1e-4 && vb > 1e-4, va.toFixed(4) + '/' + vb.toFixed(4));
+  });
+
+  /* ---------- 3. 展開圖 ---------- */
+  var NET_IDS = ['cube', 'cuboid', 'triPrism', 'quadPrism', 'pentaPrism', 'hexaPrism',
+    'triPyramid', 'quadPyramid', 'pentaPyramid', 'cylinder', 'cone'];
+  NET_IDS.forEach(function (id) {
+    var net = N.build(id, 0);
+    ok('build net：' + id, !!net && net.cells && net.cells.length > 0,
+      net ? ('kind=' + net.kind + ' cells=' + net.cells.length) : 'null');
+    if (net && net.cells.length) {
+      var v = N.verifyNet(net, id);
+      ok('correct net folds exactly：' + id, v.ok, 'ok=' + v.ok + ' off=' + (v.offSolid || 0) + ' overlap=' + ((v.overlaps || []).length));
+    }
+  });
+
+  // 正方體三個展開圖
+  for (var cv = 0; cv < 3; cv++) {
+    var cnet = N.build('cube', cv);
+    var cver = N.verifyNet(cnet, 'cube');
+    ok('cube 展開圖 ' + (cv + 1) + ' 可以摺合', cver.ok, 'ok=' + cver.ok);
+    // 對應：6 個 cell，每個對應一個不同的面
+    var groups = {};
+    cnet.cells.forEach(function (c) { if (c.group >= 0) groups[c.group] = (groups[c.group] || 0) + 1; });
+    var gkeys = Object.keys(groups);
+    ok('cube 展開圖 ' + (cv + 1) + ' 面 ↔ cell 一對一', gkeys.length === 6 &&
+      gkeys.every(function (k) { return groups[k] === 1; }),
+      gkeys.length + ' groups');
+  }
+
+  // 干擾項必須摺不成
+  ['block23', 'five'].forEach(function (k) {
+    var dn = N.distractorNet('cube', k);
+    var dv = dn ? N.verifyNet(dn, 'cube') : null;
+    ok('cube 干擾展開圖「' + k + '」不能摺成', dn && dv && !dv.ok, dv ? ('ok=' + dv.ok) : 'null');
+  });
+
+  // 球體不能做展開圖
+  var sn = N.build('sphere', 0);
+  ok('sphere 沒有展開圖（kind=none）', sn && sn.kind === 'none' && sn.cells.length === 0, sn ? sn.kind : 'null');
+
+  /* ---------- 輸出 ---------- */
+  var pass = results.filter(function (r) { return r.pass; }).length;
+  var fail = results.length - pass;
+  var out = document.getElementById('out');
+  var sum = document.getElementById('summary');
+  sum.className = fail ? 'bad' : 'ok';
+  sum.textContent = '共 ' + results.length + ' 項：' + pass + ' 通過，' + fail + ' 失敗';
+  results.forEach(function (r) {
+    var d = document.createElement('div');
+    d.className = 'row';
+    d.innerHTML = (r.pass ? '<span class="ok">PASS</span>' : '<span class="bad">FAIL</span>') +
+      ' ' + r.name + (r.msg && !r.pass ? ' <span class="msg">— ' + r.msg + '</span>' : '');
+    out.appendChild(d);
+  });
+  window.__TEST_RESULTS__ = results;
+  window.__TEST_SUMMARY__ = { total: results.length, pass: pass, fail: fail };
+})();
+</script>
+</body>
+</html>

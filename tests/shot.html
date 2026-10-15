@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Peek-a-Shape 截圖</title>
+<link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">🎲 <span class="zh" id="brand-name">立體探秘樂</span></div>
+      <div class="spacer"></div>
+      <nav class="modes">
+        <button class="pill home" id="btn-home">主頁</button>
+      </nav>
+      <button class="pill lang" id="btn-lang">EN</button>
+    </header>
+    <div id="main">
+      <div id="stage-wrap" style="position:relative;flex:1 1 64%;min-width:0;min-height:0;display:flex;">
+        <div id="stage"></div>
+      </div>
+      <aside id="panel"></aside>
+    </div>
+  </div>
+
+  <script src="../lib/three.min.js"></script>
+  <script src="../js/geometry.js"></script>
+  <script src="../js/clip.js"></script>
+  <script src="../js/nets.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/viewer.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+  // URL hash form: #view=cut&shape=cube&lang=zh&mode=horizontal&pos=0&angle=40&t=0.4&variant=1&cut=1&edges=1&verts=1&group=0
+  (function () {
+    function params() {
+      var o = {}, h = location.hash.replace(/^#/, '');
+      if (!h) return o;
+      h.split('&').forEach(function (kv) { var a = kv.split('='); o[decodeURIComponent(a[0])] = a[1] === undefined ? '' : decodeURIComponent(a[1]); });
+      return o;
+    }
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        var p = params(), A = PS.app, st = A.state, T = PS.i18n;
+        if (p.lang) T.setLang(p.lang);
+        if (p.shape) st.shape = p.shape;
+        if (p.edges !== undefined) st.inspect.edges = p.edges === '1';
+        if (p.verts !== undefined) st.inspect.verts = p.verts === '1';
+        if (p.auto !== undefined) st.inspect.auto = p.auto === '1';
+        if (p.xray !== undefined) st.inspect.xray = p.xray === '1';
+        if (p.t !== undefined) st.unfold.t = parseFloat(p.t);
+        if (p.variant !== undefined) st.unfold.variant = parseInt(p.variant, 10);
+        if (p.group !== undefined) st.unfold.pickGroup = parseInt(p.group, 10);
+        if (p.mode) st.cut.mode = p.mode;
+        if (p.pos !== undefined) st.cut.pos = parseFloat(p.pos);
+        if (p.angle !== undefined) st.cut.angle = parseFloat(p.angle);
+        if (p.quiz === 'unfold') A._test.go('unfold'), A._test.newUnfoldQuiz();
+        else if (p.quiz === 'cut') A._test.go('cut'), A._test.newCutQuiz();
+        else if (p.view) A._test.go(p.view);
+        if (p.cut === '1') { A._test.go('cut'); A._test.doCut(); }
+        A._test.render();
+        if (p.count) {
+          p.count.split(',').forEach(function (g) {
+            A._test.onPick({ type: 'face', group: parseInt(g, 10) });
+          });
+        }
+        if (p.probe === '1') {
+          var v = A._test.getViewer();
+          v.renderer.render(v.scene, v.camera);
+          var gl = v.renderer.getContext();
+          var w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+          var px = new Uint8Array(w * h * 4);
+          gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          var green = 0, blue = 0, yellow = 0, opaque = 0;
+          for (var i = 0; i < px.length; i += 4) {
+            var r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+            if (a < 20) continue;
+            if (g > 140 && g > r + 30 && g > b + 30) green++;
+            if (b > 140 && b > r + 40 && b > g + 20) blue++;
+            if (r > 200 && g > 180 && b < 120) yellow++;
+            opaque++;
+          }
+          document.title = 'PROBE gl=' + w + 'x' + h + ' opaque=' + opaque +
+            ' green=' + green + ' blue=' + blue + ' yellow=' + yellow +
+            ' xray=' + v.xray + ' hl=' + (v.hlGroup ? v.hlGroup.children.length : -1);
+        } else if (p.rects === '1' || p.thumbs === '1') {
+          var out = [], vs = A._test.getThumbs();
+          vs.forEach(function (v) {
+            var b = v.renderer.domElement.getBoundingClientRect();
+            v.renderer.render(v.scene, v.camera);
+            var gl = v.renderer.getContext();
+            var w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+            var px = new Uint8Array(w * h * 4);
+            gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            var n = 0, sum = [0, 0, 0];
+            for (var i = 0; i < px.length; i += 4) {
+              if (px[i + 3] > 20) { n++; sum[0] += px[i]; sum[1] += px[i + 1]; sum[2] += px[i + 2]; }
+            }
+            out.push({ rect: [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)],
+              gl: [w, h], px: n, avg: n ? sum.map(function (x) { return Math.round(x / n); }) : null,
+              content: v._content ? v._content.children.length : -1, radius: +v.radius.toFixed(2) });
+          });
+          document.title = 'THUMBS ' + JSON.stringify(out);
+        } else document.title = 'ready';
+      }, 120);
+    });
+  })();
+  </script>
+</body>
+</html>
