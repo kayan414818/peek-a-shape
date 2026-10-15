@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Peek-a-Shape｜立體探秘樂</title>
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">🎲 <span class="zh" id="brand-name">立體探秘樂</span></div>
+      <div class="spacer"></div>
+      <nav class="modes">
+        <button class="pill home" id="btn-home">主頁</button>
+      </nav>
+      <button class="pill lang" id="btn-lang">EN</button>
+    </header>
+
+    <div id="main">
+      <div id="stage-wrap" style="position:relative;flex:1 1 64%;min-width:0;min-height:0;display:flex;">
+        <div id="stage"></div>
+      </div>
+      <aside id="panel"></aside>
+    </div>
+  </div>
+
+  <script src="lib/three.min.js"></script>
+  <script src="js/geometry.js"></script>
+  <script src="js/clip.js"></script>
+  <script src="js/nets.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/viewer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
