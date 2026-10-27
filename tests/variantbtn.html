@@ -29,14 +29,15 @@
       for (var i = 0; i < bs.length; i++) if (/換一個展開圖|Another net/.test(bs[i].textContent)) return bs[i];
       return null;
     }
-    ['cuboid', 'hexaPrism', 'pentaPyramid', 'cylinder', 'cone', 'sphere'].forEach(function (id) {
+    ['cube', 'cuboid', 'hexaPrism', 'pentaPyramid', 'cylinder', 'cone', 'sphere'].forEach(function (id) {
       A.state.shape = id; A.state.unfold.variant = 0; A.state.unfold.t = 1;
       A._test.go('unfold'); A._test.render();
       var b = btn();
       var line = id + ' btn=' + (b ? '"' + b.textContent + '"' : 'none') + ' variants=' + PS.nets.variants(id);
       if (b) {
         var seen = [];
-        for (var k = 0; k < 4; k++) {
+        var n = Math.min(PS.nets.variants(id) + 1, 13);
+        for (var k = 0; k < n; k++) {
           b.click();
           var bb = btn();
           seen.push(A.state.unfold.variant + (bb ? ':' + bb.textContent : ''));

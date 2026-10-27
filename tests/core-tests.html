@@ -132,8 +132,10 @@
     }
   });
 
-  // 正方體三個展開圖
-  for (var cv = 0; cv < 3; cv++) {
+  // 正方體全部 11 個展開圖
+  var cubeVc = N.variants('cube');
+  ok('cube 提供 11 個展開圖', cubeVc === 11, 'variants=' + cubeVc);
+  for (var cv = 0; cv < cubeVc; cv++) {
     var cnet = N.build('cube', cv);
     var cver = N.verifyNet(cnet, 'cube');
     ok('cube 展開圖 ' + (cv + 1) + ' 可以摺合', cver.ok, 'ok=' + cver.ok);
@@ -145,6 +147,36 @@
       gkeys.every(function (k) { return groups[k] === 1; }),
       gkeys.length + ' groups');
   }
+  // 11 個展開圖兩兩形狀不同（旋轉／翻轉後仍不同）
+  function cubeShapeKey(net) {
+    var cells = net.cells.map(function (c) { return c.grid; });
+    var best = null;
+    for (var r = 0; r < 4; r++) {
+      for (var f = 0; f < 2; f++) {
+        var t = cells.map(function (c) {
+          var x = c[0], y = c[1];
+          for (var q = 0; q < r; q++) { var tmp = x; x = -y; y = tmp; }
+          if (f) x = -x;
+          return [x, y];
+        });
+        var mnx = 99, mny = 99;
+        t.forEach(function (c) { if (c[0] < mnx) mnx = c[0]; if (c[1] < mny) mny = c[1]; });
+        t = t.map(function (c) { return [c[0] - mnx, c[1] - mny]; })
+          .sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+        var s = t.map(function (c) { return c[0] + ',' + c[1]; }).join(';');
+        if (best === null || s < best) best = s;
+      }
+    }
+    return best;
+  }
+  var shapeKeys = {}, dup = [];
+  for (var cv2 = 0; cv2 < cubeVc; cv2++) {
+    var sk = cubeShapeKey(N.build('cube', cv2));
+    if (shapeKeys[sk]) dup.push((shapeKeys[sk]) + '=' + (cv2 + 1));
+    shapeKeys[sk] = cv2 + 1;
+  }
+  ok('cube 11 個展開圖互不相同', Object.keys(shapeKeys).length === 11 && dup.length === 0,
+    'distinct=' + Object.keys(shapeKeys).length + (dup.length ? ' dup:' + dup.join(',') : ''));
 
   // 每個立體的所有「不同剪法」展開圖都要能正確摺合，且面 ↔ cell 一對一
   NET_IDS.forEach(function (id) {

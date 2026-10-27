@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>cube nets 11</title></head>
+<body>
+<pre id="out">running</pre>
+<script src="../js/geometry.js"></script>
+<script src="../js/clip.js"></script>
+<script src="../js/nets.js"></script>
+<script>
+(function () {
+  var N = window.PS.nets, G = window.PS.geo;
+  var side = G.getSolid('cube').params.w;
+  var log = [];
+
+  /* ---- 列舉所有 6 格骨牌（自由骨牌，旋轉／鏡射視為同一種） ---- */
+  function norm(cells) {
+    var mnx = 99, mny = 99;
+    cells.forEach(function (c) { if (c[0] < mnx) mnx = c[0]; if (c[1] < mny) mny = c[1]; });
+    return cells.map(function (c) { return [c[0] - mnx, c[1] - mny]; })
+      .sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+  }
+  function key(cells) {
+    var n = norm(cells), best = null;
+    for (var r = 0; r < 4; r++) {
+      for (var f = 0; f < 2; f++) {
+        var t = n.map(function (c) {
+          var x = c[0], y = c[1];
+          for (var k = 0; k < r; k++) { var tmp = x; x = -y; y = tmp; }
+          if (f) x = -x;
+          return [x, y];
+        });
+        var s = norm(t).map(function (c) { return c[0] + ',' + c[1]; }).join(';');
+        if (best === null || s < best) best = s;
+      }
+    }
+    return best;
+  }
+  function parse(k) {
+    return k.split(';').map(function (s) { return s.split(',').map(Number); });
+  }
+
+  var all = {};
+  function grow(cells) {
+    if (cells.length === 6) { all[key(cells)] = cells; return; }
+    var has = {};
+    cells.forEach(function (c) { has[c[0] + ',' + c[1]] = true; });
+    for (var i = 0; i < cells.length; i++) {
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {
+        var p = [cells[i][0] + d[0], cells[i][1] + d[1]];
+        if (has[p[0] + ',' + p[1]]) return;
+        grow(cells.concat([p]));
+      });
+    }
+  }
+  grow([[0, 0]]);
+  var keys = Object.keys(all).sort();
+  var shapes = keys.map(function (k) { return { key: k, cells: norm(all[k]) }; });
+  log.push('hexominoes=' + shapes.length);
+
+  /* ---- 每個骨牌用 BFS 生成樹摺摺看 ---- */
+  function treeOf(cells) {
+    var idx = {}, n = cells.length;
+    cells.forEach(function (c, i) { idx[c[0] + ',' + c[1]] = i; });
+    var tree = [], seen = {}, q = [0];
+    seen[0] = true;
+    while (q.length) {
+      var a = q.shift();
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {
+        var j = idx[(cells[a][0] + d[0]) + ',' + (cells[a][1] + d[1])];
+        if (j === undefined || seen[j]) return;
+        seen[j] = true; tree.push([a, j]); q.push(j);
+      });
+    }
+    return tree;
+  }
+
+  var good = [];
+  shapes.forEach(function (h) {
+    var raw = N.__internal.gridNet(side, h.cells, treeOf(h.cells));
+    var net = N.__internal.finalize(raw, G.getSolid('cube'), 'cube', { id: 'probe' });
+    var r = N.verifyNet(net, 'cube');
+    var groups = {};
+    net.cells.forEach(function (c) { if (c.group >= 0) groups[c.group] = (groups[c.group] || 0) + 1; });
+    var ks = Object.keys(groups);
+    var oneToOne = ks.length === 6 && ks.every(function (k) { return groups[k] === 1; });
+    if (r.ok && oneToOne) {
+      good.push({ key: h.key, cells: h.cells, tree: treeOf(h.cells), oneToOne: oneToOne });
+    } else if (!r.ok) {
+      log.push('reject ' + h.key + ' :: ' + JSON.stringify(r).slice(0, 160));
+    }
+  });
+  log.push('valid cube nets=' + good.length);
+  good.forEach(function (g, i) {
+    log.push('#' + (i + 1) + ' cells=' + JSON.stringify(g.cells) + ' tree=' + JSON.stringify(g.tree) + ' 1:1=' + g.oneToOne);
+  });
+  document.getElementById('out').textContent = 'CUBENETS\n' + log.join('\n');
+})();
+</script>
+</body></html>
