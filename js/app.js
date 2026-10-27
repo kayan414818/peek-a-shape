@@ -51,7 +51,8 @@
     unfold: { t: 1, variant: 0, pickGroup: -1, quiz: null, animating: false },
     cut: {
       mode: 'horizontal', angle: 35, spin: 0, pos: 0, sep: 0,
-      result: null, section: null, predicted: null, quiz: null, lastCutKey: null
+      result: null, section: null, predicted: null, quiz: null, lastCutKey: null,
+      predAttempts: 0, predHint: null, _predShape: null
     }
   };
 
@@ -581,24 +582,35 @@
     var slots = quizViewers(q.options.length);
     var opts = el('div', { class: 'options nets' });
     q.options.forEach(function (o, i) {
+      var tried = !q.answered && q.wrongIdx && q.wrongIdx.indexOf(i) >= 0;
       var cls = 'opt net-opt';
       if (q.answered) {
         if (o.correct) cls += ' ok';
         else if (i === q.chosen) cls += ' no';
-      }
+        else if (q.wrongIdx && q.wrongIdx.indexOf(i) >= 0) cls += ' no tried';
+      } else if (tried) cls += ' no tried';
       var thumb = showQuizNet(slots[i], o.net);
       opts.appendChild(el('button', {
         class: cls,
-        onclick: function () { if (!q.answered) answerUnfold(i); }
+        onclick: function () { if (!q.answered && !tried) answerUnfold(i); }
       }, [
         thumb,
         el('div', { class: 'opt-label', text: tf('unfold.quiz.netLabel', [o.letter || String.fromCharCode(65 + i)]) })
       ]));
     });
     card.appendChild(opts);
+    if (!q.answered && q.hint) {
+      card.appendChild(el('div', { class: 'feedback hint', text: q.hint }));
+      card.appendChild(el('div', { class: 'note', text: txt('unfold.quiz.hintTryAgain') }));
+    }
     if (q.answered) {
       card.appendChild(el('div', { class: 'feedback ' + (q.correctAnswer ? 'ok' : 'no'), text: unfoldExplain(q) }));
       card.appendChild(el('button', { class: 'btn teal block', text: txt('unfold.quiz.showFold') + ' ▶', onclick: function () { markActivity(); playFold(q.options[q.chosen].net, q.options[q.chosen].id); } }));
+      if (!q.correctAnswer) {
+        var right = null;
+        q.options.forEach(function (o) { if (o.correct) right = o; });
+        card.appendChild(el('button', { class: 'btn teal block', text: txt('unfold.quiz.showCorrectFold') + ' ▶', onclick: function () { if (right) { markActivity(); playFold(right.net, right.id); } } }));
+      }
       card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); state.unfold.quiz = null; render(); } }));
     }
     return card;
@@ -608,11 +620,22 @@
     return tf(q.type === 'invalid' ? 'unfold.quiz.invalidQ' : 'unfold.quiz.matchQ', [shapeName(q.target)]);
   }
   function unfoldExplain(q) {
-    var chosen = q.options[q.chosen];
-    if (q.type === 'invalid') {
-      return chosen.correct ? explainInvalidNet(chosen.res) : txt('unfold.quiz.explainOk');
+    var chosen = q.options[q.chosen] || {};
+    var correct = null;
+    q.options.forEach(function (o) { if (o.correct) correct = o; });
+    if (!correct) return '';
+    if (q.correctAnswer) {
+      if (q.type === 'invalid') return explainInvalidNet(chosen.res);   // 答對：解釋為甚麼這個摺不成
+      return txt('unfold.quiz.explainOk');
     }
-    return chosen.correct ? txt('unfold.quiz.explainOk') : explainInvalidNet(chosen.res);
+    // 第二次答錯：先講正確答案，再解釋（為甚麼錯、為甚麼對）
+    var head = tf('unfold.quiz.answerReveal', [correct.letter]);
+    if (q.type === 'invalid') {
+      return head + ' ' + tf('unfold.quiz.chosenFolds', [chosen.letter || '']) + ' ' +
+        tf('unfold.quiz.correctNotFolds', [correct.letter, netReason(correct.res)]);
+    }
+    return head + ' ' + tf('unfold.quiz.chosenNotFolds', [chosen.letter || '', netReason(chosen.res)]) + ' ' +
+      tf('unfold.quiz.correctFolds', [correct.letter]);
   }
 
   // 可以攤平成展開圖的立體（球體除外）
@@ -681,22 +704,70 @@
     // 打亂並重新命名 A/B/C（字母在畫面渲染時才組成本地化文字）
     state.unfold.quiz.options = shuffle(state.unfold.quiz.options);
     state.unfold.quiz.options.forEach(function (o, i) { o.letter = String.fromCharCode(65 + i); });
+    state.unfold.quiz.attempts = 0;     // 已答錯的次數
+    state.unfold.quiz.wrongIdx = [];    // 已試過而錯的選項（不可以再選）
+    state.unfold.quiz.hint = null;      // 第一次答錯時的提示（未揭示答案）
     render();
   }
 
   function explainInvalidNet(res) {
+    res = res || {};
     if (res.overlaps && res.overlaps.length) return txt('unfold.quiz.explainOverlap');
     if (res.watertight === false) return txt('unfold.quiz.explainGap');
     return txt('unfold.quiz.explainWrong');
   }
 
+  // 不重疊／無缺口的「原因短句」，用來組出「你選的 A 摺不成：…」
+  function netReason(res) {
+    res = res || {};
+    if (res.overlaps && res.overlaps.length) return txt('unfold.quiz.rOverlap');
+    if (res.watertight === false) return txt('unfold.quiz.rGap');
+    return txt('unfold.quiz.rWrong');
+  }
+
+  function faceCountOf(id) {
+    try { return G.info(id).counts.faces; } catch (e) { return 0; }
+  }
+
+  // 第一次答錯的提示：只引導方向，不指出哪一個才是答案
+  function unfoldHint(q, chosen) {
+    if (q.type === 'invalid') return tf('unfold.quiz.hintValidChosen', [shapeName(q.target)]);
+    var res = chosen.res || {};
+    if (res.overlaps && res.overlaps.length) return txt('unfold.quiz.hintOverlap');
+    if (res.watertight === false) return txt('unfold.quiz.hintGap');
+    return tf('unfold.quiz.hintFaces', [shapeName(q.target), String(faceCountOf(q.target))]);
+  }
+
   function answerUnfold(i) {
     var q = state.unfold.quiz;
-    q.answered = true; q.chosen = i;
+    if (!q || q.answered) return;
+    if (q.wrongIdx && q.wrongIdx.indexOf(i) >= 0) return;   // 已試過錯的，不可再選
     var chosen = q.options[i];
-    q.correctAnswer = !!chosen.correct;
+
+    if (chosen.correct) {
+      q.answered = true; q.chosen = i; q.correctAnswer = true; q.hint = null;
+      render();
+      // 答對後，系統在舞台上播放動態摺合動畫作驗證
+      playFold(chosen.net, chosen.id);
+      return;
+    }
+
+    q.attempts = (q.attempts || 0) + 1;
+    q.wrongIdx = q.wrongIdx || [];
+    q.wrongIdx.push(i);
+    q.chosen = i;
+
+    if (q.attempts < 2) {
+      // 第一次答錯：只給提示，不揭示答案、不播摺合動畫
+      q.hint = unfoldHint(q, chosen);
+      render();
+      return;
+    }
+
+    // 第二次仍然答錯：揭示正確答案並解釋
+    q.answered = true;
+    q.correctAnswer = false;
     render();
-    // 選擇後，系統在舞台上播放動態摺合動畫作驗證
     playFold(chosen.net, chosen.id);
   }
 
@@ -777,6 +848,14 @@
     state.cut.section = sec;
     state.cut.plane = plane;
 
+    // 換了立體就等於換了新問題：重設「先猜一猜」的嘗試次數
+    if (state.cut._predShape !== state.shape) {
+      state.cut._predShape = state.shape;
+      state.cut.predicted = null;
+      state.cut.predAttempts = 0;
+      state.cut.predHint = null;
+    }
+
     // 目標挑戰：用真實截面判定是否達成
     var cq = state.cut.quiz;
     if (cq && cq.type === 'target' && !cq.answered && sec && !sec.unsupported && sec.key !== 'none') {
@@ -811,7 +890,7 @@
       modes.appendChild(el('button', {
         class: 'chip' + (state.cut.mode === m ? ' active' : ''),
         text: txt('cut.mode.' + m),
-        onclick: function () { markActivity(); state.cut.mode = m; state.cut.showResult = false; state.cut.sep = 0; render(); }
+        onclick: function () { markActivity(); state.cut.mode = m; state.cut.showResult = false; state.cut.sep = 0; state.cut.predHint = null; render(); }
       }));
     });
     card.appendChild(modes);
@@ -842,15 +921,27 @@
     card.appendChild(el('h3', { text: txt('cut.predict.title') }));
     var shapes = ['triangle', 'square', 'rectangle', 'circle', 'ellipse', 'pentagon', 'hexagon', 'trapezium', 'parallelogram'];
     var popts = el('div', { class: 'options' });
+    var predLocked = !!state.cut.showResult;   // 切開之後不能再猜（避免先看答案）
     shapes.forEach(function (key) {
       var cls = 'opt';
       if (state.cut.predicted === key) cls += ' ok';
+      if (predLocked) cls += ' locked';
       popts.appendChild(el('button', {
-        class: cls, text: C.SHAPE_NAME[key][T.lang()],
-        onclick: function () { markActivity(); state.cut.predicted = key; render(); }
+        class: cls, text: C.SHAPE_NAME[key][T.lang()], disabled: predLocked,
+        onclick: function () {
+          if (predLocked) return;
+          markActivity();
+          state.cut.predicted = key;
+          state.cut.predHint = null;    // 換了猜法，舊提示不再適用（嘗試次數保留）
+          render();
+        }
       }));
     });
     card.appendChild(popts);
+    if (state.cut.predHint && !state.cut.showResult) {
+      card.appendChild(el('div', { class: 'feedback hint', text: state.cut.predHint }));
+      card.appendChild(el('div', { class: 'note', text: txt('cut.predict.hintAgain') }));
+    }
 
     // 切 / 重設
     var canCut = res.ok && (!sec || !sec.unsupported);
@@ -861,7 +952,13 @@
       }),
       el('button', {
         class: 'btn ghost', text: txt('common.reset'),
-        onclick: function () { markActivity(); state.cut.showResult = false; state.cut.sep = 0; state.cut.predicted = null; state.cut.section = null; render(); }
+        onclick: function () {
+          markActivity();
+          state.cut.showResult = false; state.cut.sep = 0;
+          state.cut.predicted = null; state.cut.section = null;
+          state.cut.predAttempts = 0; state.cut.predHint = null;
+          render();
+        }
       })
     ]));
     if (!res.ok) card.appendChild(el('div', { class: 'feedback no', text: txt('cut.cannotCut') }));
@@ -873,12 +970,14 @@
       var label = sec.unsupported ? txt('cut.unsupported') : (C.SHAPE_NAME[sec.key] ? C.SHAPE_NAME[sec.key][T.lang()] : sec.key);
       card.appendChild(el('div', { class: 'feedback ok', text: label }));
       if (state.cut.predicted) {
-        var okPred = state.cut.predicted === sec.key ||
-          (state.cut.predicted === 'rectangle' && sec.key === 'square') ||
-          (state.cut.predicted === 'triangle' && (sec.key === 'isoTriangle' || sec.key === 'equiTriangle' || sec.key === 'rightTriangle')) ||
-          (state.cut.predicted === 'ellipse' && sec.key === 'ellipse');
-        card.appendChild(el('div', { class: 'feedback ' + (okPred ? 'ok' : 'no'),
-          text: okPred ? txt('q.correct') + ' ' + label : txt('q.wrong') + ' ' + txt('cut.sectionIs') + label }));
+        var okPred = predMatches(state.cut.predicted, sec.key);
+        if (okPred) {
+          card.appendChild(el('div', { class: 'feedback ok', text: txt('q.correct') + ' ' + label }));
+        } else {
+          // 第二次都答錯（或原本已看過答案）：揭示正確答案並解釋
+          card.appendChild(el('div', { class: 'feedback no',
+            text: tf('cut.predict.reveal', [label]) + ' ' + sectionWhy(sec.key) }));
+        }
       }
     }
 
@@ -891,8 +990,32 @@
     var solid = G.getSolid(state.shape);
     var res = state.cut.result;
     if (!res) return;
-    state.cut.showResult = true;
-    state.cut.sep = 0;
+    var p = state.cut;
+    var sec = p.section;
+    var secOk = !!(sec && !sec.unsupported && sec.key && sec.key !== 'none');
+
+    // 先猜一猜：第一次答錯時只給提示，先不切開、不揭示答案
+    if (!p.showResult && p.predicted && secOk && !predMatches(p.predicted, sec.key)) {
+      if ((p.predAttempts || 0) < 1) {
+        p.predAttempts = 1;
+        p.predHint = txt('cut.modeHint.' + p.mode);
+        render();
+        return;
+      }
+      p.predAttempts = 2;   // 第二次都答錯：照樣切開，並揭示答案
+    }
+
+    // 切割大考驗（目標挑戰）：記錄嘗試次數，第一次失敗給提示，第二次給正確做法
+    var cq = p.quiz;
+    if (cq && cq.type === 'target' && !cq.answered && secOk && !targetMatch(cq.target, sec.key)) {
+      cq.attempts = (cq.attempts || 0) + 1;
+      cq.hint = (cq.attempts >= 2)
+        ? targetAnswerHint(solid, cq.target)
+        : txt('cut.quiz.targetHint1');
+    }
+
+    p.showResult = true;
+    p.sep = 0;
     render();
     // 動畫：兩塊分開
     var t0 = performance.now();
@@ -977,17 +1100,24 @@
         card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); state.cut.quiz = null; render(); } }));
       } else {
         card.appendChild(el('div', { class: 'note', text: txt('cut.targetHint') }));
+        if (q.hint) card.appendChild(el('div', { class: 'feedback hint', text: q.hint }));
         card.appendChild(el('button', { class: 'btn ghost block', text: txt('common.next'), onclick: function () { markActivity(); state.cut.quiz = null; render(); } }));
       }
       return card;
     }
     var opts = el('div', { class: 'options' });
     q.options.forEach(function (o, i) {
+      var tried = !q.answered && q.wrongIdx && q.wrongIdx.indexOf(i) >= 0;
       var cls = 'opt';
-      if (q.answered) { if (o.correct) cls += ' ok'; else if (i === q.chosen) cls += ' no'; }
-      opts.appendChild(el('button', { class: cls, text: cutOptionLabel(q, o), onclick: function () { if (!q.answered) answerCut(i); } }));
+      if (q.answered) { if (o.correct) cls += ' ok'; else if (i === q.chosen) cls += ' no'; else if (q.wrongIdx && q.wrongIdx.indexOf(i) >= 0) cls += ' no tried'; }
+      else if (tried) cls += ' no tried';
+      opts.appendChild(el('button', { class: cls, text: cutOptionLabel(q, o), disabled: !!tried, onclick: function () { if (!q.answered && !tried) answerCut(i); } }));
     });
     card.appendChild(opts);
+    if (!q.answered && q.hint) {
+      card.appendChild(el('div', { class: 'feedback hint', text: q.hint }));
+      card.appendChild(el('div', { class: 'note', text: txt('cut.quiz.hintTryAgain') }));
+    }
     if (q.answered) {
       card.appendChild(el('div', { class: 'feedback ' + (q.correctAnswer ? 'ok' : 'no'), text: cutExplain(q) }));
       card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); state.cut.quiz = null; render(); } }));
@@ -1008,11 +1138,20 @@
     return shapeLabel(o.key);
   }
   function cutExplain(q) {
-    var base;
-    if (q.type === 'target') base = q.target ? tf('cut.targetDone', [shapeLabel(q.target)]) : txt('status.geometry');
-    else base = txt('cut.sectionIs') + shapeLabel(q.answerKey);
-    if (q.answered) base += '　' + (q.correctAnswer ? txt('q.correct') : txt('hint.2'));
-    return base;
+    if (q.type === 'target') {
+      if (!q.target) return txt('status.geometry');
+      return tf('cut.targetDone', [shapeLabel(q.target)]) + (q.answered && q.correctAnswer ? '　' + txt('q.correct') : '');
+    }
+    if (q.correctAnswer) {
+      return txt('q.correct') + ' ' + tf('cut.quiz.correctSection', [shapeLabel(q.answerKey)]) + ' ' + sectionWhy(q.answerKey);
+    }
+    // 第二次答錯：揭示答案 + 解釋（為甚麼是這個形狀）
+    var truth = true;
+    (q.options || []).forEach(function (o) { if (o.correct) truth = (o.label === 'true'); });
+    var head = (q.type === 'judge')
+      ? tf('cut.quiz.judgeReveal', [txt(truth ? 'quiz.true' : 'quiz.false'), shapeLabel(q.answerKey)])
+      : tf('cut.quiz.matchReveal', [shapeLabel(q.answerKey)]);
+    return head + ' ' + sectionWhy(q.answerKey);
   }
 
   function candidateCuts(solid) {
@@ -1034,6 +1173,36 @@
   }
 
   function shapeLabel(key) { return C.SHAPE_NAME[key] ? C.SHAPE_NAME[key][T.lang()] : key; }
+
+  // 截面形狀 → 邊數（曲面截面沒有直邊）
+  var SIDES_OF = {
+    triangle: 3, rightTriangle: 3, isoTriangle: 3, equiTriangle: 3,
+    square: 4, rectangle: 4, parallelogram: 4, trapezium: 4, isoTrapezium: 4, quadrilateral: 4,
+    pentagon: 5, hexagon: 6, heptagon: 7, octagon: 8
+  };
+  // 規則式解釋：為甚麼截面是這個形狀（只用幾何事實，不假裝 AI）
+  function sectionWhy(key) {
+    var n = SIDES_OF[key];
+    if (n) return tf('cut.whySides', [String(n), shapeLabel(key)]);
+    return tf('cut.whyCurve', [shapeLabel(key)]);
+  }
+  // 「先猜一猜」的答案比對（正方形也可接受「長方形」這個較寬鬆的說法）
+  function predMatches(guess, actual) {
+    return guess === actual ||
+      (guess === 'rectangle' && actual === 'square') ||
+      (guess === 'triangle' && /triangle$/i.test(actual)) ||
+      (guess === 'ellipse' && actual === 'ellipse');
+  }
+  // 目標挑戰第二次失敗時：指出一個真正可行的切法
+  function targetAnswerHint(solid, target) {
+    var cands = candidateCuts(solid);
+    var hit = null;
+    cands.forEach(function (c) { if (!hit && targetMatch(target, c.key)) hit = c; });
+    if (!hit) return txt('cut.quiz.targetHint2');
+    return tf('cut.quiz.targetAnswer', [
+      txt('cut.mode.' + hit.mode), String(Math.round(hit.pos * 100)), shapeLabel(target)
+    ]);
+  }
 
   function targetMatch(target, actual) {
     if (target === actual) return true;
@@ -1058,7 +1227,8 @@
       cands.forEach(function (c) { if (targets.indexOf(c.key) < 0) targets.push(c.key); });
       var target = targets[Math.floor(Math.random() * targets.length)];
       state.cut.quiz = {
-        type: 'target', target: target, answered: false, correctAnswer: false
+        type: 'target', target: target, answered: false, correctAnswer: false,
+        attempts: 0, hint: null
       };
       render(); return;
     }
@@ -1079,6 +1249,7 @@
       var isTrue = (claim === A.key);
       state.cut.quiz = {
         type: 'judge', answered: false, mode: A.mode, claim: claim, answerKey: A.key,
+        attempts: 0, wrongIdx: [], hint: null,
         options: [
           { label: 'true', correct: isTrue },
           { label: 'false', correct: !isTrue }
@@ -1095,6 +1266,7 @@
       }
       state.cut.quiz = {
         type: 'match', answered: false, mode: A.mode, answerKey: A.key,
+        attempts: 0, wrongIdx: [], hint: null,
         options: shuffle(opts)
       };
     }
@@ -1103,8 +1275,29 @@
 
   function answerCut(i) {
     var q = state.cut.quiz;
-    q.answered = true; q.chosen = i;
-    q.correctAnswer = !!q.options[i].correct;
+    if (!q || q.answered) return;
+    if (q.wrongIdx && q.wrongIdx.indexOf(i) >= 0) return;
+    var chosen = q.options[i];
+
+    if (chosen.correct) {
+      q.answered = true; q.chosen = i; q.correctAnswer = true; q.hint = null;
+      render();
+      return;
+    }
+
+    q.attempts = (q.attempts || 0) + 1;
+    q.wrongIdx = q.wrongIdx || [];
+    q.wrongIdx.push(i);
+    q.chosen = i;
+
+    if (q.attempts < 2) {
+      // 第一次答錯：只給提示（按切法給幾何線索），不揭示答案
+      q.hint = txt('cut.modeHint.' + (q.mode || state.cut.mode));
+      render();
+      return;
+    }
+    q.answered = true;
+    q.correctAnswer = false;
     render();
   }
 
@@ -1123,6 +1316,7 @@
       newUnfoldQuiz: newUnfoldQuiz, answerUnfold: answerUnfold,
       newCutQuiz: newCutQuiz, answerCut: answerCut,
       candidateCuts: candidateCuts, targetMatch: targetMatch, shapeLabel: shapeLabel,
+      predMatches: predMatches, sectionWhy: sectionWhy,
       doCut: doCut, getViewer: function () { return viewer; },
       onPick: onPick,
       getThumbs: function () { return _thumbViewers || []; }

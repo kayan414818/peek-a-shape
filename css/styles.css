@@ -155,12 +155,18 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: inset 0 0 0 2px rgba(78,168,242,.18); pointer-events: none; }
 .opt.ok { background: #d9f6c9; color: #255c0e; box-shadow: 0 3px 0 #a9e086; }
 .opt.no { background: #ffe0e6; color: #a02147; box-shadow: 0 3px 0 #f2b3c2; }
+/* 已試過而錯的選項：淡化、不可再按 */
+.opt.tried { opacity: .42; filter: grayscale(1); box-shadow: none; cursor: default; }
+/* 切開之後鎖住的預測選項 */
+.opt.locked { opacity: .55; cursor: default; box-shadow: none; }
+.opt:disabled { cursor: default; }
 
 .feedback { margin-top: 10px; border-radius: 14px; padding: 10px 12px; font-size: 14px; font-weight: 700; }
 .pick-note { margin: 8px 0; border-radius: 14px; padding: 10px 12px; font-size: 15px; font-weight: 800;
   background: #eafbe1; color: #2b6b12; box-shadow: 0 3px 0 #cdeec0; }
 .feedback.ok { background: #eafbe1; color: #2b6b12; }
 .feedback.no { background: #fff0d9; color: #9a5a00; }
+.feedback.hint { background: #e8f3ff; color: #0f5b93; box-shadow: inset 0 0 0 2px #c8e2fb; }
 
 .badge { display: inline-block; background: #fff0d9; color: #9a5a00; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800; }
 .badge.warn { background: #ffe0e6; color: #a02147; }

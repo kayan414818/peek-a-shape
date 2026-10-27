@@ -215,7 +215,7 @@
         st.unfold.t = 0; A._test.render();
       });
 
-      // 展開圖考驗：多跑幾次，逐一選項作答
+      // 展開圖考驗：答錯兩次機制（第一次錯只給提示，第二次錯才揭示答案）
       for (var u = 0; u < 8; u++) {
         check('unfold quiz #' + (u + 1), function () {
           A._test.go('unfold'); st.shape = 'cube'; st.unfold.quiz = null; A._test.render();
@@ -230,8 +230,33 @@
           // 逐一作答（每個選項都測，重新生成題目）
           for (var i = 0; i < 3; i++) {
             A._test.newUnfoldQuiz();
+            var qi = st.unfold.quiz;
+            var isRight = !!qi.options[i].correct;
             A._test.answerUnfold(i);
-            if (!st.unfold.quiz.answered) throw new Error('not marked answered');
+            if (isRight) {
+              if (!qi.answered || !qi.correctAnswer) throw new Error('correct answer not accepted');
+              continue;
+            }
+            // 第一次答錯：只給提示，不揭示答案
+            if (qi.answered) throw new Error('first wrong answer must not be revealed');
+            if (!qi.hint) throw new Error('no hint after first wrong answer');
+            if (!document.querySelector('#panel .feedback.hint')) throw new Error('hint not rendered');
+            // 同一個錯選項不能再按
+            A._test.answerUnfold(i);
+            if (qi.answered) throw new Error('tried option should stay locked');
+            // 第二次都答錯 → 揭示答案
+            var other = -1;
+            qi.options.forEach(function (o, k) { if (!o.correct && k !== i) other = k; });
+            if (other < 0) throw new Error('no second wrong option');
+            A._test.answerUnfold(other);
+            if (!qi.answered) throw new Error('second wrong answer should reveal');
+            if (qi.correctAnswer) throw new Error('second wrong answer marked correct');
+            if (!document.querySelector('#panel .feedback.no')) throw new Error('reveal text not rendered');
+            // 揭示後有「看正確答案的摺合動畫」按鈕
+            var hasBtn = Array.prototype.some.call(document.querySelectorAll('#panel .btn'), function (b) {
+              return /摺合|fold/i.test(b.textContent);
+            });
+            if (!hasBtn) throw new Error('no correct-net fold button');
           }
         });
       }
@@ -291,10 +316,10 @@
         });
       });
 
-      check('cut quiz all three types, every option', function () {
+      check('cut quiz all three types, every option (2 attempts)', function () {
         A._test.go('cut'); st.shape = 'cube';
         var seen = {};
-        for (var n = 0; n < 30; n++) {
+        for (var n = 0; n < 40; n++) {
           st.cut.quiz = null;
           A._test.newCutQuiz();
           var q = st.cut.quiz;
@@ -311,17 +336,84 @@
               A._test.render();
               if (!st.cut.quiz.answered) throw new Error('target not detected as solved for ' + q.target);
             }
-          } else {
-            for (var i = 0; i < q.options.length; i++) {
-              st.cut.quiz = null; A._test.newCutQuiz();
-              var qq = st.cut.quiz;
-              if (qq.type === 'target') continue;
-              A._test.answerCut(Math.min(i, qq.options.length - 1));
-              if (!st.cut.quiz.answered) throw new Error('cut quiz not answered');
+            // 目標題：答錯時第一次給提示、第二次才給正確做法
+            st.cut.quiz = null; A._test.newCutQuiz();
+            var tq = st.cut.quiz;
+            if (tq.type === 'target' && !tq.answered) {
+              st.cut.showResult = false;
+              st.cut.predicted = null;
+              A._test.doCut();
+              if (st.cut.quiz.answered) throw new Error('target should not be answered by a wrong cut');
+              if (!st.cut.quiz.hint) throw new Error('target hint missing after 1st attempt');
+              A._test.doCut();
+              if (!st.cut.quiz.hint) throw new Error('target hint missing after 2nd attempt');
+              if (!document.querySelector('#panel .feedback.hint')) throw new Error('target hint not rendered');
             }
+            continue;
+          }
+          // 逐個選項測試（每次重新生成題目，因為選項會重新洗牌）
+          for (var i = 0; i < q.options.length; i++) {
+            st.cut.quiz = null; A._test.newCutQuiz();
+            var qq = st.cut.quiz;
+            if (qq.type === 'target') continue;
+            if (!qq.options[i]) continue;
+            var isRight = !!qq.options[i].correct;
+            A._test.answerCut(i);
+            if (isRight) {
+              if (!qq.answered || !qq.correctAnswer) throw new Error('correct answer not accepted');
+              continue;
+            }
+            if (qq.answered) throw new Error('1st wrong cut answer must not be revealed');
+            if (!qq.hint) throw new Error('cut hint missing');
+            var other = -1;
+            qq.options.forEach(function (o, k) { if (!o.correct && k !== i) other = k; });
+            if (other < 0) {
+              // 二選一：另一個就是正確答案
+              for (var k2 = 0; k2 < qq.options.length; k2++) if (k2 !== i) other = k2;
+              A._test.answerCut(other);
+              if (!qq.answered || !qq.correctAnswer) throw new Error('remaining correct option not accepted');
+              continue;
+            }
+            A._test.answerCut(other);
+            if (!qq.answered) throw new Error('2nd wrong cut answer should reveal');
+            if (qq.correctAnswer) throw new Error('2nd wrong cut answer marked correct');
+            if (!document.querySelector('#panel .feedback.no')) throw new Error('cut reveal text missing');
           }
         }
         if (!seen.match || !seen.judge || !seen.target) throw new Error('did not observe all quiz types: ' + JSON.stringify(seen));
+      });
+
+      // 先猜一猜：第一次錯只給提示（不切開），第二次錯才切開並揭示答案
+      check('cut prediction: two attempts', function () {
+        A._test.go('cut'); st.shape = 'cube';
+        st.cut.mode = 'horizontal'; st.cut.pos = 0;
+        st.cut.showResult = false; st.cut.sep = 0; st.cut.predicted = null;
+        st.cut.predAttempts = 0; st.cut.predHint = null; A._test.render();
+        var sec = st.cut.section;
+        if (!sec || sec.unsupported) throw new Error('no section to predict');
+        var wrong = ['triangle', 'pentagon', 'hexagon', 'circle'].filter(function (k) {
+          return !A._test.predMatches(k, sec.key);
+        })[0];
+        if (!wrong) throw new Error('no wrong prediction available');
+        st.cut.predicted = wrong; A._test.render();
+        A._test.doCut();
+        if (st.cut.showResult) throw new Error('1st wrong prediction must not cut');
+        if (!st.cut.predHint) throw new Error('prediction hint missing');
+        if (!document.querySelector('#panel .feedback.hint')) throw new Error('prediction hint not rendered');
+        st.cut.predHint = null; A._test.render();
+        A._test.doCut();
+        if (!st.cut.showResult) throw new Error('2nd wrong prediction should cut');
+        if (!document.querySelector('#panel .feedback.no')) throw new Error('prediction reveal missing');
+        // 切開之後預測選項鎖住，不能再偷看答案
+        if (!document.querySelector('#panel .opt.locked')) throw new Error('prediction options should be locked after cut');
+        // 正確的預測：答對
+        st.cut.showResult = false; st.cut.predicted = null;
+        st.cut.predAttempts = 0; st.cut.predHint = null; A._test.render();
+        var sec2 = st.cut.section;
+        st.cut.predicted = sec2.key; A._test.render();
+        A._test.doCut();
+        if (!st.cut.showResult) throw new Error('correct prediction should cut');
+        if (!document.querySelector('#panel .feedback.ok')) throw new Error('correct prediction not praised');
       });
 
       // 5. 語言切換：切到英文後每個模組、每個立體都要能渲染
