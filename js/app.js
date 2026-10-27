@@ -60,13 +60,15 @@
   var stageBtns = null;
 
   function markActivity() {}
+  // 畫面上顯示「展開程度」：0% = 立體（已摺合），100% = 展開圖（已攤平）
+  function foldPct(t) { return Math.round((1 - t) * 100); }
   function autoBtnLabel() {
     var t = state.unfold.t;
     var key;
     if (Math.abs(t - 1) < 0.01) key = 'unfold.autoUnfold';
     else if (Math.abs(t) < 0.01) key = 'unfold.autoFold';
     else key = (t > 0.5 ? 'unfold.autoFold' : 'unfold.autoUnfold');
-    return txt(key) + ' (' + Math.round(t * 100) + '%)';
+    return txt(key) + ' (' + foldPct(t) + '%)';
   }
   function startUnfoldAuto() {
     if (state.unfold._anim) return;
@@ -83,9 +85,9 @@
       state.unfold.t = v;
       viewer.setFold(v);
       var pctEl = panelEl && panelEl.querySelector('.pct');
-      if (pctEl) pctEl.textContent = Math.round(v * 100) + '%';
+      if (pctEl) pctEl.textContent = foldPct(v) + '%';
       var sld = panelEl && panelEl.querySelector('.slider');
-      if (sld) sld.value = String(Math.round(v * 100));
+      if (sld) sld.value = String(foldPct(v));
       var ab = doc.getElementById('btn-auto-fold');
       if (ab) ab.textContent = autoBtnLabel();
       if (p < 1) requestAnimationFrame(step);
@@ -441,19 +443,19 @@
     card.appendChild(el('h3', { text: txt('common.choose') }));
     card.appendChild(solidChips(function () { state.unfold.variant = 0; state.unfold.t = 1; render(); }));
 
-    // 摺合滑桿（0% 展開圖 ↔ 100% 立體，連續變化）
+    // 展開滑桿（0% 立體 ↔ 100% 展開圖，連續變化）
     card.appendChild(el('h3', { text: txt('unfold.slider') }));
-    var pctEl = el('div', { class: 'sub pct', style: 'text-align:center;font-weight:800;color:#2a7fbf', text: Math.round(state.unfold.t * 100) + '%' });
+    var pctEl = el('div', { class: 'sub pct', style: 'text-align:center;font-weight:800;color:#2a7fbf', text: foldPct(state.unfold.t) + '%' });
     var row = el('div', { class: 'slider-row' }, [
-      el('label', { text: txt('unfold.flat') }),
-      el('input', { class: 'slider', type: 'range', min: '0', max: '100', value: String(Math.round(state.unfold.t * 100)) })
+      el('label', { text: txt('unfold.solid') }),
+      el('input', { class: 'slider', type: 'range', min: '0', max: '100', value: String(foldPct(state.unfold.t)) })
     ]);
     var rng = row.querySelector('input');
     rng.addEventListener('input', function () {
       markActivity();
-      state.unfold.t = +rng.value / 100;
+      state.unfold.t = 1 - (+rng.value) / 100;   // 0% = 立體、100% = 展開圖
       viewer.setFold(state.unfold.t);
-      pctEl.textContent = Math.round(state.unfold.t * 100) + '%';
+      pctEl.textContent = foldPct(state.unfold.t) + '%';
       var ab = doc.getElementById('btn-auto-fold');
       if (ab) ab.textContent = autoBtnLabel();
     });
@@ -488,7 +490,7 @@
   }
 
   function setFoldValue(v, input) {
-    state.unfold.t = Math.max(0, Math.min(1, v / 100));
+    state.unfold.t = Math.max(0, Math.min(1, 1 - v / 100));
     viewer.setFold(state.unfold.t);
     render();
   }

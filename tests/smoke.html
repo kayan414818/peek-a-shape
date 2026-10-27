@@ -115,7 +115,7 @@
         var rng = document.querySelector('#panel .slider');
         if (!rng) throw new Error('no fold slider');
         rng.value = 60; rng.dispatchEvent(new Event('input'));
-        if (Math.abs(st.unfold.t - 0.6) > 1e-6) throw new Error('slider did not set t=' + st.unfold.t);
+        if (Math.abs(st.unfold.t - 0.4) > 1e-6) throw new Error('slider did not set t=' + st.unfold.t);
         // 變體按鈕
         var before = st.unfold.variant;
         var btn = document.querySelector('#panel .btn.ghost.block');
@@ -133,7 +133,7 @@
         var btn = document.getElementById('btn-auto-fold');
         if (!btn) throw new Error('no auto-fold button');
         if (!/\(\d+%\)/.test(btn.textContent)) throw new Error('no percentage on button: ' + btn.textContent);
-        if (!/\(0%\)/.test(btn.textContent)) throw new Error('expected 0%: ' + btn.textContent);
+        if (!/\(100%\)/.test(btn.textContent)) throw new Error('expected 100%: ' + btn.textContent);
         var rng = document.querySelector('#panel .slider');
         rng.value = '60';
         rng.dispatchEvent(new Event('input', { bubbles: true }));

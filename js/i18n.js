@@ -76,7 +76,7 @@
     /* ---------- 模組二：展開 ---------- */
     'unfold.title': { zh: '展開圖魔法', en: 'Net Magic' },
     'unfold.intro': { zh: '拉動滑桿，看看立體怎樣攤平成展開圖，再摺回立體。', en: 'Drag the slider to flatten the solid into a net, then fold it back.' },
-    'unfold.slider': { zh: '攤平 ↔ 摺合', en: 'Flatten ↔ Fold' },
+    'unfold.slider': { zh: '摺合 ↔ 攤平', en: 'Fold ↔ Flatten' },
     'unfold.flat': { zh: '展開圖', en: 'Flat net' },
     'unfold.solid': { zh: '立體', en: 'Solid' },
     'unfold.correspond': { zh: '點展開圖上的面，對應的立體面會亮起來。', en: 'Click a face on the net; the matching solid face glows.' },
