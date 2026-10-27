@@ -525,12 +525,55 @@
     this.colorAttr = null; this.baseColors = null;
   };
 
-  /* 把展開圖整體平移到原點（依目前摺合程度重新計算），確保顯示在舞台正中 */
+  /* 回傳一個世界平移量，使這組點投影後的「畫面邊界中心」落在舞台正中。
+     透視投影下世界中心 ≠ 畫面中心，需要這個補正。 */
+  function screenCenterOffset(points, camera) {
+    if (!points.length) return [0, 0];
+    var tmp = new THREE.Vector3();
+    function centre(dx, dy) {
+      var mnx = 9, mxx = -9, mny = 9, mxy = -9;
+      for (var i = 0; i < points.length; i++) {
+        tmp.set(points[i][0] + dx, points[i][1] + dy, points[i][2]).project(camera);
+        if (tmp.x < mnx) mnx = tmp.x; if (tmp.x > mxx) mxx = tmp.x;
+        if (tmp.y < mny) mny = tmp.y; if (tmp.y > mxy) mxy = tmp.y;
+      }
+      return [(mnx + mxx) / 2, (mny + mxy) / 2];
+    }
+    var c0 = centre(0, 0);
+    if (Math.abs(c0[0]) < 2e-4 && Math.abs(c0[1]) < 2e-4) return [0, 0];
+    var mn = [1e9, 1e9], mx = [-1e9, -1e9];
+    points.forEach(function (p) {
+      if (p[0] < mn[0]) mn[0] = p[0]; if (p[0] > mx[0]) mx[0] = p[0];
+      if (p[1] < mn[1]) mn[1] = p[1]; if (p[1] > mx[1]) mx[1] = p[1];
+    });
+    var h = Math.max(0.02, Math.max(mx[0] - mn[0], mx[1] - mn[1]) * 0.01);
+    var px = centre(h, 0), py = centre(0, h);
+    var j11 = (px[0] - c0[0]) / h, j21 = (px[1] - c0[1]) / h;
+    var j12 = (py[0] - c0[0]) / h, j22 = (py[1] - c0[1]) / h;
+    var det = j11 * j22 - j12 * j21;
+    if (Math.abs(det) < 1e-12) return [0, 0];
+    return [(-c0[0] * j22 + c0[1] * j12) / det, (c0[0] * j21 - c0[1] * j11) / det];
+  }
+
+  /* 把展開圖整體平移到舞台正中（依目前摺合程度重新計算） */
   Viewer.prototype._recenterNet = function () {
     if (!this._content) return;
     var b = boundsOfMeshes(this.cellMeshes);
     if (!b) { this._content.position.set(0, 0, 0); return; }
-    this._content.position.set(-b.c[0], -b.c[1], -b.c[2]);
+    var local = [];
+    this.cellMeshes.forEach(function (mesh) {
+      var a = mesh.geometry && mesh.geometry.getAttribute && mesh.geometry.getAttribute('position');
+      if (!a) return;
+      for (var i = 0; i < a.count; i++) {
+        local.push([a.getX(i) - b.c[0], a.getY(i) - b.c[1], a.getZ(i) - b.c[2]]);
+      }
+    });
+    var off = screenCenterOffset(local, this.camera);
+    // 再修正一次（平移後「最外側的頂點」可能改變，線性估價會有殘差）
+    var local2 = local.map(function (p) { return [p[0] + off[0], p[1] + off[1], p[2]]; });
+    var off2 = screenCenterOffset(local2, this.camera);
+    off = [off[0] + off2[0], off[1] + off2[1]];
+    this._content.position.set(-b.c[0] + off[0], -b.c[1] + off[1], -b.c[2]);
   };
 
   /* 依展開圖（0% 攤平狀態）的大小與目前鏡頭角度，調整相機距離使之完整入鏡 */
@@ -553,28 +596,36 @@
       for (var k = 0; k < 3; k++) { if (p[k] < mn[k]) mn[k] = p[k]; if (p[k] > mx[k]) mx[k] = p[k]; }
     });
     var c = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+    var local = pts.map(function (p) { return [p[0] - c[0], p[1] - c[1], p[2] - c[2]]; });
 
     var self = this, tmp = new THREE.Vector3();
-    function maxAbsNdc() {
-      var m = 0;
-      pts.forEach(function (p) {
-        tmp.set(p[0] - c[0], p[1] - c[1], p[2] - c[2]).project(self.camera);
-        if (Math.abs(tmp.x) > m) m = Math.abs(tmp.x);
-        if (Math.abs(tmp.y) > m) m = Math.abs(tmp.y);
+    function projHalf(off) {
+      var mnx = 9, mxx = -9, mny = 9, mxy = -9;
+      local.forEach(function (p) {
+        tmp.set(p[0] + off[0], p[1] + off[1], p[2]).project(self.camera);
+        if (tmp.x < mnx) mnx = tmp.x; if (tmp.x > mxx) mxx = tmp.x;
+        if (tmp.y < mny) mny = tmp.y; if (tmp.y > mxy) mxy = tmp.y;
       });
-      return m;
+      return Math.max((mxx - mnx) / 2, (mxy - mny) / 2);
     }
 
     var r = Math.max(2.6, Math.min(30, this.radius));
-    for (var i = 0; i < 12; i++) {
+    for (var round = 0; round < 3; round++) {
       this.radius = r;
       this._applyCamera();
-      var m = maxAbsNdc();
-      if (Math.abs(m - margin) < 0.01) break;
-      r = Math.max(2.6, Math.min(30, r * (m / margin)));
+      var off = screenCenterOffset(local, this.camera);
+      for (var i = 0; i < 10; i++) {
+        this.radius = r;
+        this._applyCamera();
+        var m = projHalf(off);
+        if (Math.abs(m - margin) < 0.005) break;
+        r = Math.max(2.6, Math.min(30, r * (m / margin)));
+      }
     }
     this.radius = r;
     this._applyCamera();
+    // 鏡頭距離改了，重新置中（目前摺合狀態）
+    this._recenterNet();
   };
 
   /* 圓柱側面需要沿圓周細分，否則只用 4 個角去摺合會退化成一條線（看起來像透明） */

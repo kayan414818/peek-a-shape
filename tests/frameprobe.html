@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>frame probe</title>
+<link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">🎲 <span id="brand-name">立體探秘樂</span></div>
+      <div class="spacer"></div>
+      <nav class="modes"><button class="pill home" id="btn-home">主頁</button></nav>
+      <button class="pill lang" id="btn-lang">EN</button>
+    </header>
+    <div id="main">
+      <div id="stage-wrap" style="position:relative;flex:1 1 64%;min-width:0;min-height:0;display:flex;">
+        <div id="stage"></div>
+      </div>
+      <aside id="panel"></aside>
+    </div>
+  </div>
+  <script src="../lib/three.min.js"></script>
+  <script src="../js/geometry.js"></script>
+  <script src="../js/clip.js"></script>
+  <script src="../js/nets.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/viewer.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var A = PS.app, out = [];
+      var ids = ['cube','cuboid','triPrism','quadPrism','pentaPrism','hexaPrism',
+                 'triPyramid','quadPyramid','pentaPyramid','cylinder','cone'];
+      function measure(v) {
+        v.renderer.render(v.scene, v.camera);
+        var box = new THREE.Box3();
+        var tmp = new THREE.Vector3();
+        var mnx = 9, mxx = -9, mny = 9, mxy = -9, n = 0;
+        v._content.children.forEach(function (m) {
+          if (!m.geometry) return;
+          var pos = m.geometry.attributes.position;
+          m.updateMatrixWorld(true);
+          for (var i = 0; i < pos.count; i++) {
+            tmp.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).project(v.camera);
+            if (tmp.x < mnx) mnx = tmp.x; if (tmp.x > mxx) mxx = tmp.x;
+            if (tmp.y < mny) mny = tmp.y; if (tmp.y > mxy) mxy = tmp.y;
+            n++;
+          }
+        });
+        return { cx: +((mnx + mxx) / 2).toFixed(3), cy: +((mny + mxy) / 2).toFixed(3),
+                 w: +(mxx - mnx).toFixed(3), h: +(mxy - mny).toFixed(3), pts: n };
+      }
+      ids.forEach(function (id) {
+        var vc = PS.nets.variants(id);
+        for (var v = 0; v < vc; v++) {
+          A.state.shape = id;
+          A.state.unfold.variant = v;
+          A.state.unfold.t = 0;
+          A._test.go('unfold');
+          A._test.render();
+          var vw = A._test.getViewer();
+          var flat = measure(vw);
+          // 用 frameNet 相同的算法重算一次，確認相機距離是否真的對應 0.8
+          var nnet = PS.nets.build(id, v), tmp2 = new THREE.Vector3();
+          var mnx = 9, mxx = -9, mny = 9, mxy = -9;
+          nnet.cells.forEach(function (c) {
+            c.poly.forEach(function (p) {
+              var q = nnet.warp(c.id, 0, [p[0], p[1], 0]);
+              tmp2.set(q[0], q[1], q[2]).project(vw.camera);
+              if (tmp2.x < mnx) mnx = tmp2.x; if (tmp2.x > mxx) mxx = tmp2.x;
+              if (tmp2.y < mny) mny = tmp2.y; if (tmp2.y > mxy) mxy = tmp2.y;
+            });
+          });
+          var rawHalf = +Math.max((mxx - mnx) / 2, (mxy - mny) / 2).toFixed(3);
+          A.state.unfold.t = 1;
+          vw.setFold(1);
+          var solid = measure(vw);
+          out.push(id + ' v' + v + ' flat=' + JSON.stringify(flat) + ' solid=' + JSON.stringify(solid) +
+            ' rawHalf=' + rawHalf + ' cam=' + JSON.stringify({ r: +vw.radius.toFixed(2), fov: vw.camera.fov, aspect: +vw.camera.aspect.toFixed(3), w: vw._w, h: vw._h, pos: vw._content.position.toArray().map(function (x) { return +x.toFixed(3); }) }));
+        }
+      });
+      document.title = 'FRAME\n' + out.join('\n');
+      document.getElementById('panel').textContent = 'FRAME\n' + out.join('\n');
+    }, 300);
+  });
+  </script>
+</body></html>

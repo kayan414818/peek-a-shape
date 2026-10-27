@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>net variants</title></head>
+<body>
+<div id="out">running</div>
+<script src="../js/geometry.js"></script>
+<script src="../js/clip.js"></script>
+<script src="../js/nets.js"></script>
+<script>
+(function () {
+  var out = [];
+  var N = window.PS.nets, G = window.PS.geo;
+  var ids = ['cube','cuboid','triPrism','quadPrism','pentaPrism','hexaPrism',
+             'triPyramid','quadPyramid','pentaPyramid','cylinder','cone'];
+  ids.forEach(function (id) {
+    var n = N.variants(id);
+    for (var v = 0; v < n; v++) {
+      var net = N.build(id, v);
+      var line = id + ' v' + v + ' cells=' + net.cells.length;
+      if (!net) { out.push(line + ' NULL'); continue; }
+      try {
+        var r = N.verifyNet(net, id);
+        line += ' ok=' + r.ok;
+        if (r.kind === 'poly') {
+          line += ' watertight=' + r.watertight + ' badEdges=' + (r.badEdges||[]).length +
+                  ' overlaps=' + r.overlaps.length + ' areaErr=' + r.areaErr.toFixed(5);
+        } else {
+          line += ' offSolid=' + (r.offSolid||[]).length + ' uncovered=' + r.uncovered + ' areaErr=' + r.areaErr.toFixed(5);
+        }
+        out.push(line);
+      } catch (e) { out.push(line + ' ERROR ' + e.message); }
+    }
+  });
+  // 平鋪時不可自我重疊（抽樣檢查）
+  out.push('--- flat overlap (sampled) ---');
+  ids.forEach(function (id) {
+    var n = N.variants(id);
+    for (var v = 0; v < n; v++) {
+      var net = N.build(id, v);
+      var polys = net.cells.map(function (c) { return { id: c.id, poly: c.poly }; });
+      var hits = [];
+      for (var i = 0; i < polys.length; i++) {
+        for (var j = i + 1; j < polys.length; j++) {
+          if (polysOverlap(polys[i].poly, polys[j].poly)) hits.push(polys[i].id + 'x' + polys[j].id);
+        }
+      }
+      if (hits.length) out.push(id + ' v' + v + ' OVERLAP ' + hits.join(','));
+    }
+  });
+  function polysOverlap(a, b) {
+    // 只取「嚴格內部」的取樣點（質心＋往各頂點一半的位置），避免共邊被誤判重疊
+    function samples(poly) {
+      var cx = 0, cy = 0;
+      poly.forEach(function (p) { cx += p[0]; cy += p[1]; });
+      cx /= poly.length; cy /= poly.length;
+      var out = [[cx, cy]];
+      poly.forEach(function (p) { out.push([(p[0] + cx) / 2, (p[1] + cy) / 2]); });
+      return out;
+    }
+    function inside(p, poly) {
+      var c = false;
+      for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        var yi = poly[i][1], yj = poly[j][1];
+        if (((yi > p[1]) !== (yj > p[1])) &&
+            (p[0] < (poly[j][0] - poly[i][0]) * (p[1] - yi) / (yj - yi) + poly[i][0])) c = !c;
+      }
+      return c;
+    }
+    var ok = false;
+    [[a, b], [b, a]].forEach(function (pair) {
+      samples(pair[0]).forEach(function (p) { if (inside(p, pair[1])) ok = true; });
+    });
+    return ok;
+  }
+  document.getElementById('out').textContent = 'RESULT\n' + out.join('\n');
+})();
+</script>
+</body></html>

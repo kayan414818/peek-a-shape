@@ -468,9 +468,11 @@
     card.appendChild(pctEl);
 
     if (N.variants(id) > 1) {
+      var vcount = N.variants(id);
       card.appendChild(el('button', {
-        class: 'btn ghost block', text: txt('unfold.variant'),
-        onclick: function () { markActivity(); state.unfold.variant = (state.unfold.variant + 1) % N.variants(id); render(); }
+        class: 'btn ghost block',
+        text: txt('unfold.variant') + ' (' + (state.unfold.variant + 1) + '/' + vcount + ')',
+        onclick: function () { markActivity(); state.unfold.variant = (state.unfold.variant + 1) % vcount; render(); }
       }));
     }
     var toggleBtn = el('button', {

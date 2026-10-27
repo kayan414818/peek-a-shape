@@ -106,10 +106,11 @@
   }
 
   /* ---------- 展開圖建立 ---------- */
-  function buildPrismNet(solid) {
+  function buildPrismNet(solid, variant) {
     var n = solid.params.n, R = solid.params.R, h = solid.params.h;
     var s = 2 * R * Math.sin(Math.PI / n);
     var apothem = R * Math.cos(Math.PI / n);
+    var v = variant || 0;
     var cells = [], hinges = [];
     for (var i = 0; i < n; i++) {
       var x = i * s;
@@ -118,13 +119,17 @@
     for (i = 0; i < n - 1; i++) {
       hinges.push({ parent: 'side' + i, child: 'side' + (i + 1), p: [(i + 1) * s, 0], d: [0, 1], angle: 360 / n });
     }
-    // 兩個底面：分別接在第一個側面的上邊與下邊
-    var base1 = basePolygonOnEdge([0, h], [s, h], n, apothem, 1);
-    var base2 = basePolygonOnEdge([0, 0], [s, 0], n, apothem, -1);
+    // 兩個底面可以接在不同的側面上（＝剪開不同的側棱），形成不同的展開方式
+    var topAt, botAt;
+    if (v === 1) { topAt = 1 % n; botAt = 2 % n; }
+    else if (v === 2) { topAt = n - 1; botAt = 0; }
+    else { topAt = 0; botAt = 0; }
+    var base1 = basePolygonOnEdge([topAt * s, h], [topAt * s + s, h], n, apothem, 1);
+    var base2 = basePolygonOnEdge([botAt * s, 0], [botAt * s + s, 0], n, apothem, -1);
     cells.push({ id: 'base1', type: 'poly', group: 1, poly: base1 });
     cells.push({ id: 'base2', type: 'poly', group: 0, poly: base2 });
-    hinges.push({ parent: 'side0', child: 'base1', p: [0, h], d: [1, 0], angle: 90 });
-    hinges.push({ parent: 'side0', child: 'base2', p: [0, 0], d: [1, 0], angle: 90 });
+    hinges.push({ parent: 'side' + topAt, child: 'base1', p: [topAt * s, h], d: [1, 0], angle: 90 });
+    hinges.push({ parent: 'side' + botAt, child: 'base2', p: [botAt * s, 0], d: [1, 0], angle: 90 });
     return { kind: 'hinge', cells: cells, hinges: hinges };
   }
 
@@ -149,25 +154,38 @@
     return out;
   }
 
-  function buildExtrudedNet(solid) {
-    // 長方體：4 個側面 + 2 個底面（十字形展開圖）
+  function buildExtrudedNet(solid, variant) {
+    // 長方體：4 個側面排成一列 + 2 個底面
+    // 不同變體＝底面接在不同側面的上／下邊（等於剪開不同的棱）
     var w = solid.params.w, h = solid.params.h, d = solid.params.d;
+    var v = variant || 0;
     var cells = [], hinges = [];
     var widths = [w, d, w, d];
-    var x = 0;
+    var xs = [0];
     for (var i = 0; i < 4; i++) {
-      cells.push({ id: 'side' + i, type: 'poly', group: 2 + i, poly: [[x, 0], [x + widths[i], 0], [x + widths[i], h], [x, h]] });
-      if (i < 3) hinges.push({ parent: 'side' + i, child: 'side' + (i + 1), p: [x + widths[i], 0], d: [0, 1], angle: 90 });
-      x += widths[i];
+      var x = xs[i], ww = widths[i];
+      cells.push({ id: 'side' + i, type: 'poly', group: 2 + i, poly: [[x, 0], [x + ww, 0], [x + ww, h], [x, h]] });
+      if (i < 3) hinges.push({ parent: 'side' + i, child: 'side' + (i + 1), p: [x + ww, 0], d: [0, 1], angle: 90 });
+      xs.push(x + ww);
     }
-    cells.push({ id: 'base1', type: 'poly', group: 1, poly: [[0, h], [w, h], [w, h + d], [0, h + d]] });
-    cells.push({ id: 'base2', type: 'poly', group: 0, poly: [[0, -d], [w, -d], [w, 0], [0, 0]] });
-    hinges.push({ parent: 'side0', child: 'base1', p: [0, h], d: [1, 0], angle: 90 });
-    hinges.push({ parent: 'side0', child: 'base2', p: [0, 0], d: [1, 0], angle: 90 });
+    var topAt = (v === 1) ? 1 : 0;
+    var botAt = (v === 1) ? 3 : (v === 2 ? 2 : 0);
+    function baseAt(idx, above) {
+      var bx = xs[idx], bw = widths[idx];
+      // 接在寬 w 的側面 → 底面沿 y 方向伸出 d；接在寬 d 的側面 → 伸出 w
+      var dep = (idx % 2 === 0) ? d : w;
+      if (above) return [[bx, h], [bx + bw, h], [bx + bw, h + dep], [bx, h + dep]];
+      return [[bx, -dep], [bx + bw, -dep], [bx + bw, 0], [bx, 0]];
+    }
+    cells.push({ id: 'base1', type: 'poly', group: 1, poly: baseAt(topAt, true) });
+    cells.push({ id: 'base2', type: 'poly', group: 0, poly: baseAt(botAt, false) });
+    hinges.push({ parent: 'side' + topAt, child: 'base1', p: [xs[topAt], h], d: [1, 0], angle: 90 });
+    hinges.push({ parent: 'side' + botAt, child: 'base2', p: [xs[botAt], 0], d: [1, 0], angle: 90 });
     return { kind: 'hinge', cells: cells, hinges: hinges };
   }
 
-  function buildPyramidNet(solid) {
+  function buildPyramidNet(solid, variant) {
+    if ((variant || 0) === 1) return buildPyramidFanNet(solid);
     var n = solid.params.n, R = solid.params.R, h = solid.params.h, apothem = solid.params.apothem;
     var base = regularPoly2D(n, R, 0, 0, Math.PI / 2);
     var incline = Math.atan2(h, apothem) / DEG;
@@ -190,25 +208,70 @@
     return { kind: 'hinge', cells: cells, hinges: hinges };
   }
 
-  function buildCylinderNet(solid) {
+  /* 角錐第二種展開：把側面繞著錐頂連續攤開成一排三角形（扇形），
+     底面接在中間那一條底邊上。等於沿著不同的側棱剪開。 */
+  function buildPyramidFanNet(solid) {
+    var n = solid.params.n, R = solid.params.R, h = solid.params.h, apothem = solid.params.apothem;
+    var s = solid.params.side || 2 * R * Math.sin(Math.PI / n);
+    var e = Math.sqrt(R * R + h * h);                     // 側棱長（底頂點 → 錐頂）
+    var beta = 2 * Math.asin(Math.min(1, s / (2 * e)));   // 每個側面在錐頂的夾角
+    var incline = Math.atan2(h, apothem);                 // 側面與底面的夾角
+    var baseFold = 180 - incline / DEG;
+    // 相鄰兩個側面沿側棱的摺角＝兩面外法線的夾角
+    var latFold = Math.acos(Math.max(-1, Math.min(1,
+      Math.sin(incline) * Math.sin(incline) * Math.cos(2 * Math.PI / n) +
+      Math.cos(incline) * Math.cos(incline)))) / DEG;
+    var a0 = -Math.PI / 2 - n * beta / 2;
+    var V = [];
+    for (var k = 0; k <= n; k++) {
+      var a = a0 + k * beta;
+      V.push([e * Math.cos(a), e * Math.sin(a)]);
+    }
+    var m = Math.floor(n / 2);
+    var cells = [{ id: 'base', type: 'poly', group: 0, poly: basePolygonOnEdge(V[m], V[m + 1], n, apothem, -1) }];
+    for (k = 0; k < n; k++) {
+      cells.push({ id: 'tri' + k, type: 'poly', group: 1 + k, poly: [[0, 0], V[k].slice(), V[k + 1].slice()] });
+    }
+    var hinges = [];
+    hinges.push({
+      parent: 'base', child: 'tri' + m, p: V[m].slice(),
+      d: [V[m + 1][0] - V[m][0], V[m + 1][1] - V[m][1]], angle: baseFold
+    });
+    for (k = m; k < n - 1; k++) {
+      hinges.push({ parent: 'tri' + k, child: 'tri' + (k + 1), p: V[k + 1].slice(), d: [-V[k + 1][0], -V[k + 1][1]], angle: latFold });
+    }
+    for (k = m; k > 0; k--) {
+      hinges.push({ parent: 'tri' + k, child: 'tri' + (k - 1), p: V[k].slice(), d: [-V[k][0], -V[k][1]], angle: latFold });
+    }
+    return { kind: 'hinge', cells: cells, hinges: hinges };
+  }
+
+  function buildCylinderNet(solid, variant) {
     var r = solid.params.r, h = solid.params.h;
     var w = 2 * Math.PI * r;
+    var v = variant || 0;
+    // 第二種擺法：兩個圓面分別貼在側面矩形的左右兩端（仍各在上／下邊）
+    var cx0 = v === 1 ? -w / 2 + r : 0;
+    var cx1 = v === 1 ? w / 2 - r : 0;
     var cells = [
       { id: 'side', type: 'roll', group: 2, poly: [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]] },
-      { id: 'cap0', type: 'circle', group: 0, center: [0, -h / 2 - r], r: r, poly: circlePoly(0, -h / 2 - r, r, 72) },
-      { id: 'cap1', type: 'circle', group: 1, center: [0, h / 2 + r], r: r, poly: circlePoly(0, h / 2 + r, r, 72) }
+      { id: 'cap0', type: 'circle', group: 0, center: [cx0, -h / 2 - r], r: r, poly: circlePoly(cx0, -h / 2 - r, r, 72) },
+      { id: 'cap1', type: 'circle', group: 1, center: [cx1, h / 2 + r], r: r, poly: circlePoly(cx1, h / 2 + r, r, 72) }
     ];
     return { kind: 'roll', cells: cells, r: r, h: h, w: w };
   }
 
-  function buildConeNet(solid) {
+  function buildConeNet(solid, variant) {
     var r = solid.params.r, h = solid.params.h;
     var L = Math.sqrt(r * r + h * h);
     var alpha = 2 * Math.PI * r / L;
     var steps = 72;
     var a0 = -Math.PI / 2 - alpha / 2, a1 = -Math.PI / 2 + alpha / 2;
     var sector = [[0, 0]].concat(arcPoly(0, 0, L, a0, a1, steps));
-    var bearingCenter = [0, -L - r];
+    // 第一種：底圓貼在扇形弧的最低點下方；第二種：貼在扇形弧的右端
+    var v = variant || 0;
+    var tang = v === 1 ? a1 : -Math.PI / 2;
+    var bearingCenter = [(L + r) * Math.cos(tang), (L + r) * Math.sin(tang)];
     var cells = [
       { id: 'side', type: 'cone-side', group: 1, poly: sector, L: L, alpha: alpha },
       { id: 'base', type: 'circle', group: 0, center: bearingCenter, r: r, poly: circlePoly(bearingCenter[0], bearingCenter[1], r, 72) }
@@ -420,46 +483,52 @@
       };
       return (cache[key] = netS);
     }
-    var raw, meta, variants = 1;
+    var raw, meta;
+    var v = variant || 0;
+    var vcount = variants(shapeId);
     if (shapeId === 'cube') {
-      variants = 3;
       var side = solid.params.w;
-      var v = variant || 0;
-      if (v === 0) {
-        raw = gridNet(side, [[0, 0], [1, 0], [2, 0], [3, 0], [1, 1], [1, -1]], [[0, 1], [1, 2], [2, 3], [1, 4], [1, 5]]);
-      } else if (v === 1) {
+      if (v === 1) {
         raw = gridNet(side, [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [3, -1]], [[0, 1], [1, 2], [2, 3], [0, 4], [3, 5]]);
-      } else {
+      } else if (v === 2) {
         raw = gridNet(side, [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2], [3, 2]], [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]);
+      } else {
+        raw = gridNet(side, [[0, 0], [1, 0], [2, 0], [3, 0], [1, 1], [1, -1]], [[0, 1], [1, 2], [2, 3], [1, 4], [1, 5]]);
       }
       meta = { id: 'cube-net' + v, label: { zh: '正方體展開圖 ' + (v + 1), en: 'Cube net ' + (v + 1) } };
     } else if (shapeId === 'cuboid') {
-      raw = buildExtrudedNet(solid);
+      raw = buildExtrudedNet(solid, v);
+      meta = { id: 'cuboid-net' + v };
     } else if (shapeId === 'cylinder') {
-      raw = buildCylinderNet(solid);
+      raw = buildCylinderNet(solid, v);
+      meta = { id: 'cylinder-net' + v };
     } else if (shapeId === 'cone') {
-      raw = buildConeNet(solid);
+      raw = buildConeNet(solid, v);
+      meta = { id: 'cone-net' + v };
     } else if (shapeId.indexOf('Prism') >= 0) {
-      if (shapeId === 'quadPrism') {
-        // 四角柱用正方形底（與立體一致）
-        raw = buildPrismNet(solid);
-      } else {
-        raw = buildPrismNet(solid);
-      }
+      raw = buildPrismNet(solid, v);
+      meta = { id: shapeId + '-net' + v };
     } else if (shapeId.indexOf('Pyramid') >= 0) {
-      raw = buildPyramidNet(solid);
+      raw = buildPyramidNet(solid, v);
+      meta = { id: shapeId + '-net' + v };
     }
     if (!raw) return null;
-    raw.variants = variants;
+    raw.variants = vcount;
     var net = finalize(raw, solid, shapeId, meta);
     cache[key] = net;
     return net;
   }
 
+  var VARIANT_COUNT = {
+    cube: 3, cuboid: 3,
+    triPrism: 3, quadPrism: 3, pentaPrism: 3, hexaPrism: 3,
+    triPyramid: 2, quadPyramid: 2, pentaPyramid: 2,
+    cylinder: 2, cone: 2, sphere: 0
+  };
+
   function variants(shapeId) {
-    if (shapeId === 'cube') return 3;
-    if (shapeId === 'sphere') return 0;
-    return 1;
+    var c = VARIANT_COUNT[shapeId];
+    return typeof c === 'number' ? c : 1;
   }
 
   /* ---------- 展開圖驗證（幾何） ---------- */

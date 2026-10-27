@@ -146,6 +146,27 @@
       gkeys.length + ' groups');
   }
 
+  // 每個立體的所有「不同剪法」展開圖都要能正確摺合，且面 ↔ cell 一對一
+  NET_IDS.forEach(function (id) {
+    var vc = N.variants(id);
+    var faceCount = G.getSolid(id).groups.length;
+    ok(id + ' 提供多種展開圖', vc >= 2, 'variants=' + vc);
+    for (var v = 0; v < vc; v++) {
+      var n2 = N.build(id, v);
+      var r2 = n2 ? N.verifyNet(n2, id) : null;
+      ok(id + ' 展開圖 ' + (v + 1) + '/' + vc + ' 可以摺合', !!(n2 && r2 && r2.ok),
+        r2 ? ('ok=' + r2.ok + ' watertight=' + r2.watertight) : 'null');
+      if (n2 && r2) {
+        var gg = {};
+        n2.cells.forEach(function (c) { if (c.group >= 0) gg[c.group] = (gg[c.group] || 0) + 1; });
+        var ks = Object.keys(gg);
+        ok(id + ' 展開圖 ' + (v + 1) + ' 面 ↔ cell 一對一',
+          ks.length === faceCount && ks.every(function (k) { return gg[k] === 1; }),
+          ks.length + '/' + faceCount);
+      }
+    }
+  });
+
   // 干擾項必須摺不成
   ['block23', 'five'].forEach(function (k) {
     var dn = N.distractorNet('cube', k);

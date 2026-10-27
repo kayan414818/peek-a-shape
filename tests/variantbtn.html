@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8" /><title>variant btn</title><link rel="stylesheet" href="../css/styles.css" /></head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">🎲 <span id="brand-name">立體探秘樂</span></div>
+      <div class="spacer"></div>
+      <nav class="modes"><button class="pill home" id="btn-home">主頁</button></nav>
+      <button class="pill lang" id="btn-lang">EN</button>
+    </header>
+    <div id="main">
+      <div id="stage-wrap" style="position:relative;flex:1 1 64%;min-width:0;min-height:0;display:flex;"><div id="stage"></div></div>
+      <aside id="panel"></aside>
+    </div>
+  </div>
+  <script src="../lib/three.min.js"></script>
+  <script src="../js/geometry.js"></script>
+  <script src="../js/clip.js"></script>
+  <script src="../js/nets.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/viewer.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+  setTimeout(function () {
+    var A = PS.app, out = [];
+    function btn() {
+      var bs = document.querySelectorAll('#panel button');
+      for (var i = 0; i < bs.length; i++) if (/換一個展開圖|Another net/.test(bs[i].textContent)) return bs[i];
+      return null;
+    }
+    ['cuboid', 'hexaPrism', 'pentaPyramid', 'cylinder', 'cone', 'sphere'].forEach(function (id) {
+      A.state.shape = id; A.state.unfold.variant = 0; A.state.unfold.t = 1;
+      A._test.go('unfold'); A._test.render();
+      var b = btn();
+      var line = id + ' btn=' + (b ? '"' + b.textContent + '"' : 'none') + ' variants=' + PS.nets.variants(id);
+      if (b) {
+        var seen = [];
+        for (var k = 0; k < 4; k++) {
+          b.click();
+          var bb = btn();
+          seen.push(A.state.unfold.variant + (bb ? ':' + bb.textContent : ''));
+          b = bb;
+        }
+        line += ' clicks=[' + seen.join(' | ') + ']';
+      }
+      out.push(line);
+    });
+    document.getElementById('panel').innerHTML = '';
+    var pre = document.createElement('pre');
+    pre.textContent = 'BTN\n' + out.join('\n');
+    document.getElementById('panel').appendChild(pre);
+  }, 400);
+  </script>
+</body></html>
