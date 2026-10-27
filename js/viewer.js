@@ -576,12 +576,13 @@
     this._content.position.set(-b.c[0] + off[0], -b.c[1] + off[1], -b.c[2]);
   };
 
-  /* 依展開圖（0% 攤平狀態）的大小與目前鏡頭角度，調整相機距離使之完整入鏡 */
-  Viewer.prototype.frameNet = function (net, margin) {
+  /* 依展開圖（0% 攤平狀態）的大小與目前鏡頭角度，算出「剛好完整入鏡」的相機距離。
+     只量度、不改動目前鏡頭狀態。 */
+  Viewer.prototype._fitRadius = function (net, margin) {
     margin = margin || 0.82;
-    if (!net || !net.cells || !net.cells.length) return;
+    if (!net || !net.cells || !net.cells.length) return null;
     this.resize();
-    if (!this._w || !this._h) return;
+    if (!this._w || !this._h) return null;
 
     var pts = [];
     net.cells.forEach(function (cell) {
@@ -589,7 +590,7 @@
         pts.push(net.warp(cell.id, 0, [p[0], p[1], 0]));
       });
     });
-    if (!pts.length) return;
+    if (!pts.length) return null;
 
     var mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
     pts.forEach(function (p) {
@@ -609,7 +610,8 @@
       return Math.max((mxx - mnx) / 2, (mxy - mny) / 2);
     }
 
-    var r = Math.max(2.6, Math.min(30, this.radius));
+    var saved = this.radius;
+    var r = Math.max(2.6, Math.min(30, saved));
     for (var round = 0; round < 3; round++) {
       this.radius = r;
       this._applyCamera();
@@ -622,9 +624,32 @@
         r = Math.max(2.6, Math.min(30, r * (m / margin)));
       }
     }
+    this.radius = saved;
+    this._applyCamera();
+    return r;
+  };
+
+  /* 依展開圖（0% 攤平狀態）的大小與目前鏡頭角度，調整相機距離使之完整入鏡 */
+  Viewer.prototype.frameNet = function (net, margin) {
+    var r = this._fitRadius(net, margin);
+    if (r === null) return;
     this.radius = r;
     this._applyCamera();
     // 鏡頭距離改了，重新置中（目前摺合狀態）
+    this._recenterNet();
+  };
+
+  /* 同一個立體的所有展開圖「共用一個鏡頭距離」：
+     取最闊／最高的那個展開圖所需的距離，令切換展開圖時立體大小完全不變。 */
+  Viewer.prototype.frameNets = function (nets, margin) {
+    var best = null, self = this;
+    (nets || []).forEach(function (n) {
+      var r = self._fitRadius(n, margin);
+      if (r !== null && (best === null || r > best)) best = r;
+    });
+    if (best === null) return;
+    this.radius = best;
+    this._applyCamera();
     this._recenterNet();
   };
 

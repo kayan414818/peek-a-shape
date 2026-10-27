@@ -122,8 +122,47 @@
         if (btn) { btn.click(); if (st.unfold.variant === before) throw new Error('variant did not change'); }
       });
 
-      check('unfold pick group renders', function () {
-        A._test.go('unfold'); st.shape = 'cube'; st.unfold.pickGroup = 0; A._test.render();
+      // 換展開圖時，立體在舞台上的顯示大小必須完全不變（同一立體共用鏡頭距離）
+      check('unfold switching net keeps solid size', function () {
+        A._test.go('unfold'); st.shape = 'cube'; st.unfold.variant = 0; st.unfold.t = 1; A._test.render();
+        var vw = A._test.getViewer();
+        function solidBox() {
+          vw.renderer.render(vw.scene, vw.camera);
+          var tmp = new THREE.Vector3(), mnx = 9, mxx = -9, mny = 9, mxy = -9;
+          vw._content.children.forEach(function (m) {
+            if (!m.geometry || !m.geometry.attributes.position) return;
+            var pos = m.geometry.attributes.position;
+            m.updateMatrixWorld(true);
+            for (var i = 0; i < pos.count; i++) {
+              tmp.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).project(vw.camera);
+              if (tmp.x < mnx) mnx = tmp.x; if (tmp.x > mxx) mxx = tmp.x;
+              if (tmp.y < mny) mny = tmp.y; if (tmp.y > mxy) mxy = tmp.y;
+            }
+          });
+          return { w: mxx - mnx, h: mxy - mny };
+        }
+        var r0 = vw.radius, b0 = solidBox();
+        var seen = [];
+        for (var v = 1; v < PS.nets.variants('cube'); v++) {
+          st.unfold.variant = v; A._test.render();
+          if (Math.abs(vw.radius - r0) > 1e-6) throw new Error('camera moved at v' + v + ': ' + vw.radius.toFixed(4) + ' vs ' + r0.toFixed(4));
+          var b = solidBox();
+          if (Math.abs(b.w - b0.w) > 2e-3 || Math.abs(b.h - b0.h) > 2e-3) {
+            throw new Error('solid size changed at v' + v + ': ' + b.w.toFixed(3) + 'x' + b.h.toFixed(3) + ' vs ' + b0.w.toFixed(3) + 'x' + b0.h.toFixed(3));
+          }
+          seen.push(b.w.toFixed(3));
+        }
+        if (seen.length !== PS.nets.variants('cube') - 1) throw new Error('not all variants checked');
+        // 攤平後每個展開圖仍要完整入鏡
+        for (var v2 = 0; v2 < PS.nets.variants('cube'); v2++) {
+          st.unfold.variant = v2; st.unfold.t = 0; A._test.render();
+          var f = solidBox();
+          if (f.w > 1.66 || f.h > 1.66) throw new Error('net overflows at v' + v2 + ': ' + f.w.toFixed(2) + 'x' + f.h.toFixed(2));
+        }
+        st.unfold.variant = 0; st.unfold.t = 1; A._test.render();
+      });
+
+      check('unfold pick group renders', function () {        A._test.go('unfold'); st.shape = 'cube'; st.unfold.pickGroup = 0; A._test.render();
         st.unfold.pickGroup = -1; A._test.render();
       });
 

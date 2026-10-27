@@ -58,7 +58,7 @@
   /* ---------- DOM ---------- */
   var stageEl, panelEl, stageWrapEl, labelEl, hintEl, viewer, homeEl;
   var stageBtns = null;
-  var unfoldFrameKey = null;   // 記錄已置中的「立體＋展開圖變體」，避免每次重繪都重置鏡頭
+  var unfoldFrameKey = null;   // 記錄已置中的「立體」，避免每次重繪都重置鏡頭（同一立體的所有展開圖共用鏡頭距離）
 
   function markActivity() {}
   // 畫面上顯示「展開程度」：0% = 立體（已摺合），100% = 展開圖（已攤平）
@@ -496,10 +496,16 @@
     panelEl.appendChild(unfoldQuizCard());
 
     // 版面（面板寬度）確定後，才把展開圖置中並調整縮放，確保在 3D 主舞台正中
-    var fk = id + '|' + state.unfold.variant;
+    // 鏡頭距離以「同一個立體的所有展開圖」一併計算：切換展開圖時大小不變，只換形狀
+    var fk = id;
     if (unfoldFrameKey !== fk) {
       unfoldFrameKey = fk;
-      viewer.frameNet(net, 0.8);
+      var allNets = [];
+      for (var vi = 0; vi < N.variants(id); vi++) {
+        var vn = N.build(id, vi);
+        if (vn && vn.kind !== 'none' && vn.cells && vn.cells.length) allNets.push(vn);
+      }
+      viewer.frameNets(allNets, 0.8);
     }
   }
 

@@ -243,6 +243,35 @@
     for (k = m; k > 0; k--) {
       hinges.push({ parent: 'tri' + k, child: 'tri' + (k - 1), p: V[k].slice(), d: [-V[k][0], -V[k][1]], angle: latFold });
     }
+    // 統一擺放方向：底面是固定不動的根，它的平面內角度決定摺好後整個立體的朝向。
+    // 把整張展開圖繞原點轉一個最小角度，令底面的角度與「星形展開圖」一致，
+    // 這樣切換展開圖時立體不會轉向，看上去大小、角度都一樣。
+    var bc = polyCentroid(cells[0].poly);
+    var a0v = Math.atan2(cells[0].poly[0][1] - bc[1], cells[0].poly[0][0] - bc[0]);
+    var step = 2 * Math.PI / n;
+    var spin = Math.PI / 2 - a0v;
+    spin = spin - Math.floor(spin / step) * step;
+    if (spin > 1e-9) {
+      var cs = Math.cos(spin), sn = Math.sin(spin);
+      var rot = function (q) { return [q[0] * cs - q[1] * sn, q[0] * sn + q[1] * cs]; };
+      cells.forEach(function (c) { c.poly = c.poly.map(rot); });
+      hinges.forEach(function (hh) { hh.p = rot(hh.p); hh.d = rot(hh.d); });
+    }
+    // 顏色／面編號也跟「星形展開圖」一致：用摺合後的位置，把每個三角形對回底面哪一條邊，
+    // 這樣換展開圖時，立體每一面的顏色都不會改變。
+    var M = hingeTransforms({ kind: 'hinge', cells: cells, hinges: hinges }, 1);
+    var bc2 = polyCentroid(cells[0].poly);
+    cells.forEach(function (c) {
+      if (c.id === 'base') return;
+      var sx = 0, sy = 0;
+      c.poly.forEach(function (p) {
+        var q = m4apply(M[c.id], [p[0], p[1], 0]);
+        sx += q[0]; sy += q[1];
+      });
+      var ang = Math.atan2(sy / c.poly.length - bc2[1], sx / c.poly.length - bc2[0]);
+      var idx = Math.round((ang - Math.PI / 2 - step / 2) / step);
+      c.group = 1 + (((idx % n) + n) % n);
+    });
     return { kind: 'hinge', cells: cells, hinges: hinges };
   }
 
