@@ -23,6 +23,13 @@
   function txt(k) { return T.t(k); }
   function tf(k, a) { return T.tf(k, a); }
   function shapeName(id) { return G.NAME[id][T.lang()]; }
+  // 英文句子中用「a / an + 小寫形狀名」，中文直接回傳名稱
+  function withA(label) {
+    if (T.lang() !== 'en') return label;
+    var s = String(label);
+    s = s.charAt(0).toLowerCase() + s.slice(1);
+    return (/^[aeiou]/i.test(s) ? 'an ' : 'a ') + s;
+  }
 
   function el(tag, attrs, kids) {
     var n = doc.createElement(tag);
@@ -617,7 +624,7 @@
   }
 
   function unfoldQuestion(q) {
-    return tf(q.type === 'invalid' ? 'unfold.quiz.invalidQ' : 'unfold.quiz.matchQ', [shapeName(q.target)]);
+    return tf(q.type === 'invalid' ? 'unfold.quiz.invalidQ' : 'unfold.quiz.matchQ', [withA(shapeName(q.target))]);
   }
   function unfoldExplain(q) {
     var chosen = q.options[q.chosen] || {};
@@ -731,11 +738,11 @@
 
   // 第一次答錯的提示：只引導方向，不指出哪一個才是答案
   function unfoldHint(q, chosen) {
-    if (q.type === 'invalid') return tf('unfold.quiz.hintValidChosen', [shapeName(q.target)]);
+    if (q.type === 'invalid') return tf('unfold.quiz.hintValidChosen', [withA(shapeName(q.target))]);
     var res = chosen.res || {};
     if (res.overlaps && res.overlaps.length) return txt('unfold.quiz.hintOverlap');
     if (res.watertight === false) return txt('unfold.quiz.hintGap');
-    return tf('unfold.quiz.hintFaces', [shapeName(q.target), String(faceCountOf(q.target))]);
+    return tf('unfold.quiz.hintFaces', [withA(shapeName(q.target)), String(faceCountOf(q.target))]);
   }
 
   function answerUnfold(i) {
@@ -743,6 +750,7 @@
     if (!q || q.answered) return;
     if (q.wrongIdx && q.wrongIdx.indexOf(i) >= 0) return;   // 已試過錯的，不可再選
     var chosen = q.options[i];
+    if (!chosen) return;
 
     if (chosen.correct) {
       q.answered = true; q.chosen = i; q.correctAnswer = true; q.hint = null;
@@ -976,7 +984,7 @@
         } else {
           // 第二次都答錯（或原本已看過答案）：揭示正確答案並解釋
           card.appendChild(el('div', { class: 'feedback no',
-            text: tf('cut.predict.reveal', [label]) + ' ' + sectionWhy(sec.key) }));
+            text: tf('cut.predict.reveal', [withA(label)]) + ' ' + sectionWhy(sec.key) }));
         }
       }
     }
@@ -1127,7 +1135,7 @@
 
   function cutQuestion(q) {
     if (q.type === 'target') {
-      return q.target ? tf('cut.targetQ', [shapeLabel(q.target)]) : txt('status.geometry');
+      return q.target ? tf('cut.targetQ', [withA(shapeLabel(q.target))]) : txt('status.geometry');
     }
     var head = txt('cut.mode.' + q.mode) + '：' + txt('cut.sectionIs');
     if (q.type === 'judge') return head + shapeLabel(q.claim) + '？';
@@ -1140,17 +1148,17 @@
   function cutExplain(q) {
     if (q.type === 'target') {
       if (!q.target) return txt('status.geometry');
-      return tf('cut.targetDone', [shapeLabel(q.target)]) + (q.answered && q.correctAnswer ? '　' + txt('q.correct') : '');
+      return tf('cut.targetDone', [withA(shapeLabel(q.target))]) + (q.answered && q.correctAnswer ? '　' + txt('q.correct') : '');
     }
     if (q.correctAnswer) {
-      return txt('q.correct') + ' ' + tf('cut.quiz.correctSection', [shapeLabel(q.answerKey)]) + ' ' + sectionWhy(q.answerKey);
+      return txt('q.correct') + ' ' + tf('cut.quiz.correctSection', [withA(shapeLabel(q.answerKey))]) + ' ' + sectionWhy(q.answerKey);
     }
     // 第二次答錯：揭示答案 + 解釋（為甚麼是這個形狀）
     var truth = true;
     (q.options || []).forEach(function (o) { if (o.correct) truth = (o.label === 'true'); });
     var head = (q.type === 'judge')
-      ? tf('cut.quiz.judgeReveal', [txt(truth ? 'quiz.true' : 'quiz.false'), shapeLabel(q.answerKey)])
-      : tf('cut.quiz.matchReveal', [shapeLabel(q.answerKey)]);
+      ? tf('cut.quiz.judgeReveal', [txt(truth ? 'quiz.true' : 'quiz.false'), withA(shapeLabel(q.answerKey))])
+      : tf('cut.quiz.matchReveal', [withA(shapeLabel(q.answerKey))]);
     return head + ' ' + sectionWhy(q.answerKey);
   }
 
@@ -1183,8 +1191,8 @@
   // 規則式解釋：為甚麼截面是這個形狀（只用幾何事實，不假裝 AI）
   function sectionWhy(key) {
     var n = SIDES_OF[key];
-    if (n) return tf('cut.whySides', [String(n), shapeLabel(key)]);
-    return tf('cut.whyCurve', [shapeLabel(key)]);
+    if (n) return tf('cut.whySides', [String(n), withA(shapeLabel(key))]);
+    return tf('cut.whyCurve', [withA(shapeLabel(key))]);
   }
   // 「先猜一猜」的答案比對（正方形也可接受「長方形」這個較寬鬆的說法）
   function predMatches(guess, actual) {
@@ -1278,6 +1286,7 @@
     if (!q || q.answered) return;
     if (q.wrongIdx && q.wrongIdx.indexOf(i) >= 0) return;
     var chosen = q.options[i];
+    if (!chosen) return;
 
     if (chosen.correct) {
       q.answered = true; q.chosen = i; q.correctAnswer = true; q.hint = null;
