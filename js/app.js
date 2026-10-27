@@ -48,7 +48,7 @@
   var state = {
     view: 'home', shape: 'cube',
     inspect: { xray: false, counted: {}, order: [], _shape: null },
-    unfold: { t: 0, variant: 0, pickGroup: -1, quiz: null, animating: false },
+    unfold: { t: 1, variant: 0, pickGroup: -1, quiz: null, animating: false },
     cut: {
       mode: 'horizontal', angle: 35, spin: 0, pos: 0, sep: 0,
       result: null, section: null, predicted: null, quiz: null, lastCutKey: null
@@ -439,7 +439,7 @@
     card.appendChild(el('h2', { text: txt('unfold.title') }));
     card.appendChild(el('div', { class: 'sub', text: txt('unfold.intro') }));
     card.appendChild(el('h3', { text: txt('common.choose') }));
-    card.appendChild(solidChips(function () { state.unfold.variant = 0; state.unfold.t = 0; render(); }));
+    card.appendChild(solidChips(function () { state.unfold.variant = 0; state.unfold.t = 1; render(); }));
 
     // 摺合滑桿（0% 展開圖 ↔ 100% 立體，連續變化）
     card.appendChild(el('h3', { text: txt('unfold.slider') }));
