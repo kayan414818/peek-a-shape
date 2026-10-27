@@ -331,33 +331,41 @@
         return [flat[0] + t * (fin[0] - flat[0]), flat[1] + t * (fin[1] - flat[1]), t * fin[2]];
       };
     } else if (net.kind === 'conic') {
-      var r2 = net.r, hh = net.h, L = net.L, alpha = net.alpha;
-      var sideAng = Math.atan2(r2, hh);
+      var hh = net.h, L = net.L, alpha = net.alpha;
       var centerOf2 = function (id) { return cellCenter(net, id); };
-      // 連續變形：由真正的攤平展開圖（z=0 平面）線性過渡到摺合後的圓錐面
+      // 可展曲面（developable）連續彎曲：
+      //   t=0 → 平面展開圖（z=0），t=1 → 完整圓錐面。
+      // 過程中每一點到錐頂的距離（斜邊長）保持不變，所以看起來是真的把扇形「捲」成圓錐，
+      // 而不是把頂點線性拉過去（舊做法會把紙片壓扁）。
       net.warp = function (cellId, t, p) {
+        var psi = alpha + (2 * Math.PI - alpha) * t;      // 目前捲起的總角度
+        var s = Math.min(1, alpha / psi);                 // sin(半頂角)
+        var c = Math.sqrt(Math.max(0, 1 - s * s));        // cos(半頂角)
+        var om = -Math.PI / 2 * (1 - t);                  // 由「水平面」轉回直立的展開圖平面
+        var co = Math.cos(om), si = Math.sin(om);
+        var ay = hh / 2 * t;                              // 錐頂由展開圖原點升到 h/2
+        var rot = function (q) {
+          return [q[0], q[1] * co - q[2] * si, q[1] * si + q[2] * co];
+        };
         if (cellId === 'side') {
-          var flatS = [p[0], p[1], 0];
           var rho = Math.hypot(p[0], p[1]);
-          var folded;
-          if (rho < 1e-9) {
-            folded = [0, hh / 2, 0];             // 頂點
-          } else {
-            var beta = Math.atan2(p[0], -p[1]);
-            var k = 2 * Math.PI / alpha;
-            var phi = -Math.PI / 2 + beta * k;
-            var sp = Math.sin(sideAng);
-            folded = [rho * sp * Math.cos(phi), hh / 2 - rho * Math.cos(sideAng), rho * sp * Math.sin(phi)];
-          }
-          return [flatS[0] + (folded[0] - flatS[0]) * t,
-                  flatS[1] + (folded[1] - flatS[1]) * t,
-                  flatS[2] + (folded[2] - flatS[2]) * t];
+          if (rho < 1e-9) return [0, ay, 0];              // 錐頂
+          var beta = Math.atan2(p[0], -p[1]);
+          var phi = -Math.PI / 2 + beta / s;
+          var q1 = rot([rho * s * Math.cos(phi), -rho * c, rho * s * Math.sin(phi)]);
+          return [q1[0], q1[1] + ay, q1[2]];
         }
+        // 底圓：保持剛體（大小不變），由攤平位置平滑移到錐底
         var c0 = centerOf2(cellId);
         var dx = p[0] - c0[0], dy = p[1] - c0[1];
-        var flat = [c0[0] + dx, c0[1] + dy, 0];
-        var fin = [dx, -hh / 2, dy];             // 攤平圓（法線 z）→ 錐底水平圓（法線 y）
-        return [flat[0] + t * (fin[0] - flat[0]), flat[1] + t * (fin[1] - flat[1]), t * fin[2]];
+        var rr = Math.hypot(dx, dy), ang = Math.atan2(dy, dx);
+        var ctr = rot([0, -L * c, 0]);                    // 錐底圓心
+        var e2 = rot([0, 0, 1]);                          // 錐底圓所在的平面方向
+        var tx = ctr[0] + rr * Math.cos(ang) + e2[0] * rr * Math.sin(ang);
+        var ty = ctr[1] + ay + e2[1] * rr * Math.sin(ang);
+        var tz = ctr[2] + e2[2] * rr * Math.sin(ang);
+        var fx = c0[0] + dx, fy = c0[1] + dy;             // 攤平位置（z=0）
+        return [fx + (tx - fx) * t, fy + (ty - fy) * t, tz * t];
       };
     } else {
       net.warp = function (cellId, t, p) { return [p[0], p[1], 0]; };

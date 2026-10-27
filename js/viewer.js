@@ -577,12 +577,44 @@
     this._applyCamera();
   };
 
+  /* 圓柱側面需要沿圓周細分，否則只用 4 個角去摺合會退化成一條線（看起來像透明） */
+  function rollGridTris(net, cell, t) {
+    var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    cell.poly.forEach(function (p) {
+      if (p[0] < x0) x0 = p[0];
+      if (p[0] > x1) x1 = p[0];
+      if (p[1] < y0) y0 = p[1];
+      if (p[1] > y1) y1 = p[1];
+    });
+    var nx = 72, ny = 2, out = [], pts = [];
+    for (var i = 0; i <= nx; i++) {
+      pts[i] = [];
+      for (var j = 0; j <= ny; j++) {
+        var u = x0 + (x1 - x0) * i / nx, v = y0 + (y1 - y0) * j / ny;
+        pts[i][j] = net.warp(cell.id, t, [u, v, 0]);
+      }
+    }
+    for (i = 0; i < nx; i++) {
+      for (j = 0; j < ny; j++) {
+        out.push([pts[i][j], pts[i + 1][j], pts[i + 1][j + 1]]);
+        out.push([pts[i][j], pts[i + 1][j + 1], pts[i][j + 1]]);
+      }
+    }
+    return out;
+  }
+
   Viewer.prototype._netGeometry = function (net, cell, t) {
     var pos = [], col = [];
     var g = cell.group;
     var base = new THREE.Color(g >= 0 ? colorOf(g) : 0xdfe7ef);
-    var poly = cell.poly.map(function (p) { return net.warp(cell.id, t, [p[0], p[1], 0]); });
-    this._faceTris(poly).forEach(function (tr) {
+    var tris;
+    if (cell.type === 'roll') {
+      tris = rollGridTris(net, cell, t);
+    } else {
+      var poly = cell.poly.map(function (p) { return net.warp(cell.id, t, [p[0], p[1], 0]); });
+      tris = this._faceTris(poly);
+    }
+    tris.forEach(function (tr) {
       tr.forEach(function (p) { pos.push(p[0], p[1], p[2]); col.push(base.r, base.g, base.b); });
     });
     var geo = new THREE.BufferGeometry();
