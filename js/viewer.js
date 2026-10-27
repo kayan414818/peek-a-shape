@@ -25,6 +25,27 @@
 
   function colorOf(g) { return PALETTE[((g % PALETTE.length) + PALETTE.length) % PALETTE.length]; }
 
+  /* 頂點圓點貼圖：用 canvas 畫一個實心圓，
+     讓 PointsMaterial 顯示成「圓點」而不是預設的方形點。 */
+  var _dotTex = null;
+  function vDotTexture() {
+    if (_dotTex) return _dotTex;
+    var s = 64;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = s;
+    var ctx = cv.getContext('2d');
+    ctx.beginPath();
+    ctx.arc(s / 2, s / 2, s / 2 - 1, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    var tex = new THREE.CanvasTexture(cv);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    _dotTex = tex;
+    return tex;
+  }
+
   function disposeObj(o) {
     if (!o) return;
     o.traverse(function (n) {
@@ -241,7 +262,8 @@
       verts.forEach(function (p) { vp.push(p[0], p[1], p[2]); });
       vg.setAttribute('position', new THREE.Float32BufferAttribute(vp, 3));
       var pts = new THREE.Points(vg, new THREE.PointsMaterial({
-        color: VERTCOL, size: 0.17, sizeAttenuation: true,
+        color: VERTCOL, size: 0.2, sizeAttenuation: true,
+        map: vDotTexture(), alphaTest: 0.5,
         depthWrite: false, depthTest: false, transparent: true
       }));
       pts.userData.overlay = 'vertices';
