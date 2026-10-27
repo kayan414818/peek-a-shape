@@ -58,6 +58,7 @@
   /* ---------- DOM ---------- */
   var stageEl, panelEl, stageWrapEl, labelEl, hintEl, viewer, homeEl;
   var stageBtns = null;
+  var unfoldFrameKey = null;   // 記錄已置中的「立體＋展開圖變體」，避免每次重繪都重置鏡頭
 
   function markActivity() {}
   // 畫面上顯示「展開程度」：0% = 立體（已摺合），100% = 展開圖（已攤平）
@@ -73,7 +74,9 @@
   function startUnfoldAuto() {
     if (state.unfold._anim) return;
     var start = state.unfold.t;
-    var target = start > 0.5 ? 0 : 1;
+    var target = start > 0.5 ? 0 : 1;   // target 0 = 攤平成展開圖；1 = 摺合成立體
+    // 動畫期間按鈕文字固定為「正在做的動作」，避免中途由「自動展開」突然變成「自動摺合」
+    var animKey = target === 0 ? 'unfold.autoUnfold' : 'unfold.autoFold';
     var dur = 900;
     var t0 = Date.now();
     state.unfold._anim = true;
@@ -89,7 +92,7 @@
       var sld = panelEl && panelEl.querySelector('.slider');
       if (sld) sld.value = String(foldPct(v));
       var ab = doc.getElementById('btn-auto-fold');
-      if (ab) ab.textContent = autoBtnLabel();
+      if (ab) ab.textContent = txt(animKey) + ' (' + foldPct(v) + '%)';
       if (p < 1) requestAnimationFrame(step);
       else { state.unfold._anim = false; render(); }
     }
@@ -181,6 +184,8 @@
       viewer.clear();
       if (panelEl) panelEl.style.display = 'block';
       if (stageWrapEl) stageWrapEl.style.flex = '1 1 64%';
+      viewer.resetView();          // 每次進入模組都由預設視角開始
+      unfoldFrameKey = null;       // 重新進模組時重新置中
     } else {
       if (panelEl) panelEl.style.display = 'none';
       if (stageWrapEl) stageWrapEl.style.flex = '1 1 100%';
@@ -487,6 +492,13 @@
 
     // 展開圖大考驗
     panelEl.appendChild(unfoldQuizCard());
+
+    // 版面（面板寬度）確定後，才把展開圖置中並調整縮放，確保在 3D 主舞台正中
+    var fk = id + '|' + state.unfold.variant;
+    if (unfoldFrameKey !== fk) {
+      unfoldFrameKey = fk;
+      viewer.frameNet(net, 0.8);
+    }
   }
 
   function setFoldValue(v, input) {

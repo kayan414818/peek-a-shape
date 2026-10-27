@@ -57,6 +57,28 @@
     });
   }
 
+  /* 計算多個 mesh 的世界邊界（幾何本身，不計父層位移） */
+  function boundsOfMeshes(meshes) {
+    var mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9], any = false;
+    meshes.forEach(function (mesh) {
+      var a = mesh.geometry && mesh.geometry.getAttribute && mesh.geometry.getAttribute('position');
+      if (!a) return;
+      for (var i = 0; i < a.count; i++) {
+        any = true;
+        var x = a.getX(i), y = a.getY(i), z = a.getZ(i);
+        if (x < mn[0]) mn[0] = x; if (x > mx[0]) mx[0] = x;
+        if (y < mn[1]) mn[1] = y; if (y > mx[1]) mx[1] = y;
+        if (z < mn[2]) mn[2] = z; if (z > mx[2]) mx[2] = z;
+      }
+    });
+    if (!any) return null;
+    return {
+      mn: mn, mx: mx,
+      c: [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2],
+      size: [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]]
+    };
+  }
+
   function Viewer(container) {
     this.container = container;
     this.scene = new THREE.Scene();
@@ -161,13 +183,18 @@
     this._w = w; this._h = h;
   };
 
+  Viewer.prototype._applyCamera = function () {
+    var r = this.radius, phi = this.phi, th = this.theta;
+    this.camera.position.set(r * Math.sin(phi) * Math.sin(th), r * Math.cos(phi), r * Math.sin(phi) * Math.cos(th));
+    this.camera.lookAt(0, 0, 0);
+    this.camera.updateMatrixWorld();
+  };
+
   Viewer.prototype._loop = function () {
     // 容器大小改變時自動調整（例如縮圖在加入 DOM 後才取得實際尺寸）
     if (this.container.clientWidth !== this._w || this.container.clientHeight !== this._h) this.resize();
     if (this.autoRotate && Object.keys(this._pointers).length === 0) this.theta += 0.006;
-    var r = this.radius, phi = this.phi, th = this.theta;
-    this.camera.position.set(r * Math.sin(phi) * Math.sin(th), r * Math.cos(phi), r * Math.sin(phi) * Math.cos(th));
-    this.camera.lookAt(0, 0, 0);
+    this._applyCamera();
     this.renderer.render(this.scene, this.camera);
     global.requestAnimationFrame(this._loop);
   };
@@ -494,7 +521,60 @@
       this.cellMeshes.push(mesh);
       this.meshes.push(mesh);
     }, this);
+    this._recenterNet();
     this.colorAttr = null; this.baseColors = null;
+  };
+
+  /* 把展開圖整體平移到原點（依目前摺合程度重新計算），確保顯示在舞台正中 */
+  Viewer.prototype._recenterNet = function () {
+    if (!this._content) return;
+    var b = boundsOfMeshes(this.cellMeshes);
+    if (!b) { this._content.position.set(0, 0, 0); return; }
+    this._content.position.set(-b.c[0], -b.c[1], -b.c[2]);
+  };
+
+  /* 依展開圖（0% 攤平狀態）的大小與目前鏡頭角度，調整相機距離使之完整入鏡 */
+  Viewer.prototype.frameNet = function (net, margin) {
+    margin = margin || 0.82;
+    if (!net || !net.cells || !net.cells.length) return;
+    this.resize();
+    if (!this._w || !this._h) return;
+
+    var pts = [];
+    net.cells.forEach(function (cell) {
+      (cell.poly || []).forEach(function (p) {
+        pts.push(net.warp(cell.id, 0, [p[0], p[1], 0]));
+      });
+    });
+    if (!pts.length) return;
+
+    var mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+    pts.forEach(function (p) {
+      for (var k = 0; k < 3; k++) { if (p[k] < mn[k]) mn[k] = p[k]; if (p[k] > mx[k]) mx[k] = p[k]; }
+    });
+    var c = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+
+    var self = this, tmp = new THREE.Vector3();
+    function maxAbsNdc() {
+      var m = 0;
+      pts.forEach(function (p) {
+        tmp.set(p[0] - c[0], p[1] - c[1], p[2] - c[2]).project(self.camera);
+        if (Math.abs(tmp.x) > m) m = Math.abs(tmp.x);
+        if (Math.abs(tmp.y) > m) m = Math.abs(tmp.y);
+      });
+      return m;
+    }
+
+    var r = Math.max(2.6, Math.min(30, this.radius));
+    for (var i = 0; i < 12; i++) {
+      this.radius = r;
+      this._applyCamera();
+      var m = maxAbsNdc();
+      if (Math.abs(m - margin) < 0.01) break;
+      r = Math.max(2.6, Math.min(30, r * (m / margin)));
+    }
+    this.radius = r;
+    this._applyCamera();
   };
 
   Viewer.prototype._netGeometry = function (net, cell, t) {
@@ -523,6 +603,7 @@
       mesh.geometry.dispose();
       mesh.geometry = self._netGeometry(self.net, cell, t);
     });
+    this._recenterNet();
   };
 
   Viewer.prototype.highlightCell = function (groupId) {
