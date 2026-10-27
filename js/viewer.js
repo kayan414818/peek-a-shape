@@ -262,7 +262,7 @@
       verts.forEach(function (p) { vp.push(p[0], p[1], p[2]); });
       vg.setAttribute('position', new THREE.Float32BufferAttribute(vp, 3));
       var pts = new THREE.Points(vg, new THREE.PointsMaterial({
-        color: VERTCOL, size: 0.2, sizeAttenuation: true,
+        color: VERTCOL, size: 0.26, sizeAttenuation: true,
         map: vDotTexture(), alphaTest: 0.5,
         depthWrite: false, depthTest: false, transparent: true
       }));
