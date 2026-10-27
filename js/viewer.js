@@ -700,6 +700,45 @@
     return geo;
   };
 
+  /* 沒有展開圖的立體（球體）：舞台上仍然顯示立體，
+     調整鏡頭距離令它看起來與其他立體大小相若（half = 投影後的半徑，NDC） */
+  Viewer.prototype.frameSolid = function (half) {
+    half = half || 0.30;
+    this.resize();
+    if (!this._w || !this._h) return;
+    var pts = [], v = new THREE.Vector3(), self = this;
+    (this.meshes || []).forEach(function (m) {
+      if (!m.geometry || !m.geometry.attributes || !m.geometry.attributes.position) return;
+      m.updateMatrixWorld(true);
+      var a = m.geometry.attributes.position;
+      for (var i = 0; i < a.count; i += 3) {
+        v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld);
+        pts.push([v.x, v.y, v.z]);
+      }
+    });
+    if (!pts.length) return;
+    var tmp = new THREE.Vector3();
+    function projHalf() {
+      var mnx = 9, mxx = -9, mny = 9, mxy = -9;
+      pts.forEach(function (p) {
+        tmp.set(p[0], p[1], p[2]).project(self.camera);
+        if (tmp.x < mnx) mnx = tmp.x; if (tmp.x > mxx) mxx = tmp.x;
+        if (tmp.y < mny) mny = tmp.y; if (tmp.y > mxy) mxy = tmp.y;
+      });
+      return Math.max((mxx - mnx) / 2, (mxy - mny) / 2);
+    }
+    var r = Math.max(2.6, Math.min(30, this.radius));
+    for (var i = 0; i < 14; i++) {
+      this.radius = r;
+      this._applyCamera();
+      var m2 = projHalf();
+      if (Math.abs(m2 - half) < 0.001) break;
+      r = Math.max(2.6, Math.min(30, r * (m2 / half)));
+    }
+    this.radius = r;
+    this._applyCamera();
+  };
+
   Viewer.prototype.setFold = function (t) {
     this.foldT = t;
     if (!this.net || !this.cellMeshes.length) return;

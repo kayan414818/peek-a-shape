@@ -162,7 +162,40 @@
         st.unfold.variant = 0; st.unfold.t = 1; A._test.render();
       });
 
-      check('unfold pick group renders', function () {        A._test.go('unfold'); st.shape = 'cube'; st.unfold.pickGroup = 0; A._test.render();
+      // 球體沒有展開圖：舞台上仍要顯示球體，而且大小適中、居中
+      check('unfold sphere still shows a sphere', function () {
+        A._test.go('unfold'); st.shape = 'sphere'; st.unfold.variant = 0; st.unfold.t = 1; A._test.render();
+        var vw = A._test.getViewer();
+        if (!vw.solid || vw.solid.id !== 'sphere') throw new Error('sphere not shown in stage');
+        if (!vw.meshes.length) throw new Error('no sphere mesh');
+        vw.renderer.render(vw.scene, vw.camera);
+        var tmp = new THREE.Vector3(), mnx = 9, mxx = -9, mny = 9, mxy = -9;
+        vw.meshes.forEach(function (m) {
+          var a = m.geometry.attributes.position;
+          m.updateMatrixWorld(true);
+          for (var i = 0; i < a.count; i++) {
+            tmp.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld).project(vw.camera);
+            if (tmp.x < mnx) mnx = tmp.x; if (tmp.x > mxx) mxx = tmp.x;
+            if (tmp.y < mny) mny = tmp.y; if (tmp.y > mxy) mxy = tmp.y;
+          }
+        });
+        var w = mxx - mnx, h = mxy - mny, cx = (mnx + mxx) / 2, cy = (mny + mxy) / 2;
+        if (w < 0.2 || h < 0.2) throw new Error('sphere too small: ' + w.toFixed(2) + 'x' + h.toFixed(2));
+        if (w > 1.3 || h > 1.3) throw new Error('sphere too big: ' + w.toFixed(2) + 'x' + h.toFixed(2));
+        if (Math.abs(cx) > 0.02 || Math.abs(cy) > 0.02) throw new Error('sphere not centred: ' + cx.toFixed(3) + ',' + cy.toFixed(3));
+        // 畫面比例：球體在螢幕上要是圓的（NDC 寬高比 = 舞台寬高比倒數）
+        var aspect = vw._w / vw._h;
+        if (Math.abs(w * aspect - h) > 0.02) throw new Error('sphere not round on screen: ' + (w * aspect).toFixed(3) + ' vs ' + h.toFixed(3));
+        // 換去其他立體再回來，仍然正常
+        st.shape = 'cube'; A._test.render();
+        st.shape = 'sphere'; A._test.render();
+        if (!vw.solid || vw.solid.id !== 'sphere') throw new Error('sphere lost after switching shapes');
+        // 沒有展開圖，所以不應出現摺合滑桿
+        if (document.querySelector('#panel .slider')) throw new Error('fold slider should not show for sphere');
+      });
+
+      check('unfold pick group renders', function () {
+        A._test.go('unfold'); st.shape = 'cube'; st.unfold.pickGroup = 0; A._test.render();
         st.unfold.pickGroup = -1; A._test.render();
       });
 

@@ -86,6 +86,7 @@
     'unfold.autoUnfold': { zh: '▶ 自動展開', en: '▶ Auto unfold' },
     'unfold.cannotNet.title': { zh: '球體不能做成展開圖', en: 'A sphere cannot be a net' },
     'unfold.cannotNet.body': { zh: '球體的表面全部是曲面，不能攤平成由直邊組成的展開圖。我們可以轉動球體來觀察它的曲面。', en: 'A sphere is all curved surface. It cannot be flattened into a net of straight edges. We can rotate the sphere to explore its curved surface.' },
+    'unfold.noNetHint': { zh: '在舞台上拖動可轉動，滾輪或雙指可放大縮小。', en: 'Drag in the stage to rotate; scroll or pinch to zoom.' },
     'unfold.quiz.title': { zh: '展開圖大考驗', en: 'Net challenge' },
     'unfold.quiz.matchQ': { zh: "哪一個展開圖可以摺成「{0}」？", en: 'Which net folds into a {0}?' },
     'unfold.quiz.invalidQ': { zh: '哪一個展開圖不能摺成「{0}」？', en: 'Which net cannot fold into a {0}?' },

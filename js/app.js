@@ -425,15 +425,23 @@
     var net = N.build(id, state.unfold.variant);
     var info = G.info(id);
 
-    // 立體不支援展開圖
+    // 立體不支援展開圖（球體）：舞台上仍然顯示球體，可以轉動／縮放觀察
     if (!net || net.kind === 'none') {
-      viewer.clear();
+      viewer.setXRay(false);
+      viewer.autoRotate = false;
+      viewer.showSolid(G.getSolid(id));
       var c0 = el('div', { class: 'card' });
       c0.appendChild(el('h2', { text: txt('unfold.cannotNet.title') }));
       c0.appendChild(el('div', { class: 'sub', text: txt('unfold.cannotNet.body') }));
+      c0.appendChild(el('div', { class: 'note', text: txt('unfold.noNetHint') }));
       c0.appendChild(el('h3', { text: txt('common.choose') }));
       c0.appendChild(solidChips(function () { state.unfold.variant = 0; render(); }));
       panelEl.appendChild(c0);
+      // 版面確定後才量度舞台大小，令球體大小與其他立體相若
+      if (unfoldFrameKey !== id) {
+        unfoldFrameKey = id;
+        viewer.frameSolid(0.30);
+      }
       return;
     }
 

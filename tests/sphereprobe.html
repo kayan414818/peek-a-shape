@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">🎲 <span class="zh" id="brand-name">立體探秘樂</span></div>
+      <div class="spacer"></div>
+      <nav class="modes">
+        <button class="pill home" id="btn-home">主頁</button>
+      </nav>
+      <button class="pill lang" id="btn-lang">EN</button>
+    </header>
+    <div id="main">
+      <div id="stage-wrap" style="position:relative;flex:1 1 64%;min-width:0;min-height:0;display:flex;">
+        <div id="stage"></div>
+      </div>
+      <aside id="panel"></aside>
+    </div>
+  </div>
+  <pre id="out" style="position:fixed;left:0;bottom:0;z-index:99;background:#fff;font-size:10px;"></pre>
+
+  <script src="../lib/three.min.js"></script>
+  <script src="../js/geometry.js"></script>
+  <script src="../js/clip.js"></script>
+  <script src="../js/nets.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/viewer.js"></script>
+  <script src="../js/app.js"></script>
+  <script>
+  setTimeout(function () {
+    var A = PS.app, st = A.state, out = [];
+    function bbox() {
+      var v = A._test.getViewer();
+      v.renderer.render(v.scene, v.camera);
+      var tmp = new THREE.Vector3(), mnx = 9, mxx = -9, mny = 9, mxy = -9, n = 0;
+      v.meshes.forEach(function (m) {
+        if (!m.geometry || !m.geometry.attributes.position) return;
+        m.updateMatrixWorld(true);
+        var a = m.geometry.attributes.position;
+        for (var i = 0; i < a.count; i++) {
+          tmp.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld).project(v.camera);
+          if (tmp.x < mnx) mnx = tmp.x; if (tmp.x > mxx) mxx = tmp.x;
+          if (tmp.y < mny) mny = tmp.y; if (tmp.y > mxy) mxy = tmp.y;
+          n++;
+        }
+      });
+      return { w: +(mxx - mnx).toFixed(3), h: +(mxy - mny).toFixed(3),
+               cx: +((mnx + mxx) / 2).toFixed(3), cy: +((mny + mxy) / 2).toFixed(3),
+               pts: n, r: +v.radius.toFixed(2), meshes: v.meshes.length,
+               id: v.solid ? v.solid.id : null };
+    }
+    st.shape = 'sphere';
+    A._test.go('unfold'); A._test.render();
+    out.push('sphere   ' + JSON.stringify(bbox()));
+    out.push('panel: ' + document.getElementById('panel').textContent.replace(/\s+/g, ' ').slice(0, 140));
+    st.shape = 'cube'; A._test.render();
+    out.push('cube     ' + JSON.stringify(bbox()));
+    st.shape = 'sphere'; A._test.render();
+    out.push('sphere2  ' + JSON.stringify(bbox()));
+    st.shape = 'cone'; A._test.render();
+    out.push('cone     ' + JSON.stringify(bbox()));
+    st.shape = 'sphere'; A._test.render();
+    out.push('sphere3  ' + JSON.stringify(bbox()));
+    PS.i18n.setLang('en'); A._test.render();
+    out.push('en panel: ' + document.getElementById('panel').textContent.replace(/\s+/g, ' ').slice(0, 150));
+    PS.i18n.setLang('zh'); A._test.render();
+    out.push('canvas ' + (document.getElementById('stage').querySelector('canvas') ? 'ok' : 'missing'));
+    document.getElementById('out').textContent = 'SPHERE\n' + out.join('\n');
+  }, 500);
+  </script>
+</body>
+</html>
