@@ -635,8 +635,13 @@
     if (!correct) return '';
     var feat = solidFeature(q.target);   // 先用目標立體自身的特徵說明
     if (q.correctAnswer) {
-      if (q.type === 'invalid') return feat + ' ' + explainInvalidNet(chosen.res);   // 答對：解釋為甚麼這個摺不成
-      return feat + ' ' + txt('unfold.quiz.explainOk');
+      if (q.type === 'invalid') {
+        // 答對：解釋為甚麼這個展開圖摺不成（另一個方向：它正是唯一摺不成的）
+        return feat + ' ' + explainInvalidNet(chosen.res) + ' ' + txt('unfold.quiz.othersFold');
+      }
+      // 答對：解釋為甚麼這個展開圖能完整包住立體（面數與立體的面一一對應）
+      var cells = (chosen.net && chosen.net.cells) ? chosen.net.cells.length : 0;
+      return feat + ' ' + tf('unfold.quiz.whyFits', [String(cells)]);
     }
     // 第二次答錯：先講正確答案，再以立體特徵解釋（為甚麼錯、為甚麼對）
     var head = tf('unfold.quiz.answerReveal', [correct.letter]);
@@ -868,7 +873,7 @@
     var cq = state.cut.quiz;
     if (cq && cq.type === 'target' && !cq.answered && sec && !sec.unsupported && sec.key !== 'none') {
       if (targetMatch(cq.target, sec.key)) {
-        cq.answered = true; cq.correctAnswer = true;
+        cq.answered = true; cq.correctAnswer = true; cq.answerKey = sec.key;
       }
     }
 
@@ -980,7 +985,9 @@
       if (state.cut.predicted) {
         var okPred = predMatches(state.cut.predicted, sec.key);
         if (okPred) {
-          card.appendChild(el('div', { class: 'feedback ok', text: txt('q.correct') + ' ' + label }));
+          // 答對：同樣解釋為甚麼截面是這個形狀（以立體特徵＋幾何理由說明）
+          card.appendChild(el('div', { class: 'feedback ok',
+            text: txt('q.correct') + ' ' + tf('cut.quiz.correctSection', [withA(label)]) + ' ' + solidFeature() + ' ' + sectionWhy(sec.key) }));
         } else {
           // 第二次都答錯（或原本已看過答案）：揭示正確答案並解釋
           card.appendChild(el('div', { class: 'feedback no',
@@ -1149,7 +1156,11 @@
     var feat = solidFeature();   // 解釋以這個立體自身的特徵為依據
     if (q.type === 'target') {
       if (!q.target) return txt('status.geometry');
-      return feat + ' ' + tf('cut.targetDone', [withA(shapeLabel(q.target))]) + (q.answered && q.correctAnswer ? '　' + txt('q.correct') : '');
+      var base = tf('cut.targetDone', [withA(shapeLabel(q.target))]);
+      if (!q.answered) return base;
+      // 答對也解釋為甚麼切得出這個截面（立體特徵 ＋ 幾何理由）
+      return base + (q.correctAnswer ? '　' + txt('q.correct') : '') + ' ' + feat +
+        (q.answerKey ? ' ' + sectionWhy(q.answerKey) : '');
     }
     if (q.correctAnswer) {
       return txt('q.correct') + ' ' + tf('cut.quiz.correctSection', [withA(shapeLabel(q.answerKey))]) + ' ' + feat + ' ' + sectionWhy(q.answerKey);

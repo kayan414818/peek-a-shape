@@ -368,6 +368,70 @@
         if (st.cut.quiz.type !== 'target' && st.cut.quiz.answered) throw new Error('new cut quiz should be unanswered');
       });
 
+      check('correct answers also explain why', function () {
+        var A2 = PS.app._test, st2 = PS.app.state;
+        // 展開圖大考驗：答對 → 立體特徵 ＋ 為甚麼這個展開圖摺得成
+        A2.go('unfold'); st2.shape = 'cube'; st2.unfold.quiz = null; A2.render();
+        A2.newUnfoldQuiz();
+        var uq = st2.unfold.quiz;
+        var uci = -1; uq.options.forEach(function (o, i) { if (o.correct) uci = i; });
+        A2.answerUnfold(uci);
+        var uFeat = PS.i18n.t('solid.feature.' + uq.target, 'zh');
+        var okBox = document.querySelector('#panel .feedback.ok');
+        if (!okBox || okBox.textContent.indexOf(uFeat) < 0) throw new Error('correct net answer missing feature explanation');
+        if (okBox.textContent.length < 40) throw new Error('correct net explanation too short');
+
+        // 切割大考驗（配對）：答對 → 立體特徵 ＋ 幾何理由
+        A2.go('cut'); st2.shape = 'cube'; st2.cut.quiz = null; st2.cut.showResult = false; A2.render();
+        var cq = null;
+        for (var k = 0; k < 40 && !cq; k++) {
+          A2.newCutQuiz();
+          if (st2.cut.quiz.type === 'match') cq = st2.cut.quiz;
+        }
+        if (!cq) throw new Error('no match cut quiz');
+        var cci = -1; cq.options.forEach(function (o, i) { if (o.correct) cci = i; });
+        A2.answerCut(cci);
+        var cFeat = PS.i18n.t('solid.feature.cube', 'zh');
+        var cBox = document.querySelector('#panel .feedback.ok');
+        if (!cBox || cBox.textContent.indexOf(cFeat) < 0) throw new Error('correct cut answer missing feature explanation');
+        if (!/條邊|曲面/.test(cBox.textContent)) throw new Error('correct cut answer missing geometric reason');
+
+        // 先猜一猜：猜對 → 立體特徵 ＋ 幾何理由
+        st2.cut.quiz = null; st2.cut.showResult = false; st2.cut.predicted = null;
+        st2.cut.predAttempts = 0; st2.cut.predHint = null;
+        st2.cut.mode = 'horizontal'; st2.cut.pos = 0; A2.render();
+        if (!st2.cut.section) throw new Error('no cube section');
+        st2.cut.predicted = 'square';
+        if (!A2.predMatches('square', st2.cut.section.key)) throw new Error('cube horizontal section should accept square');
+        A2.doCut();
+        if (!st2.cut.showResult) throw new Error('correct prediction should cut');
+        var pBox = Array.prototype.filter.call(document.querySelectorAll('#panel .feedback.ok'), function (e) {
+          return /答對|correct/i.test(e.textContent);
+        })[0];
+        if (!pBox || pBox.textContent.indexOf(cFeat) < 0) throw new Error('correct prediction missing explanation');
+        if (!/條邊|曲面/.test(pBox.textContent)) throw new Error('correct prediction missing geometric reason');
+
+        // 目標挑戰：切對 → 立體特徵 ＋ 幾何理由
+        st2.cut.quiz = null; st2.cut.showResult = false;
+        var tq = null;
+        for (var j = 0; j < 40 && !tq; j++) {
+          A2.newCutQuiz();
+          if (st2.cut.quiz.type === 'target' && st2.cut.quiz.target) tq = st2.cut.quiz;
+        }
+        if (!tq) throw new Error('no target quiz');
+        var solved = null;
+        A2.candidateCuts(PS.geo.getSolid('cube')).forEach(function (c) { if (!solved && A2.targetMatch(tq.target, c.key)) solved = c; });
+        if (!solved) throw new Error('no solution for target ' + tq.target);
+        st2.cut.mode = solved.mode; st2.cut.pos = solved.pos; st2.cut.angle = 40; st2.cut.showResult = false;
+        A2.render();
+        if (!st2.cut.quiz.answered) throw new Error('target not detected as solved');
+        var tBox = Array.prototype.filter.call(document.querySelectorAll('#panel .feedback.ok'), function (e) {
+          return /做得好|Well done/i.test(e.textContent);
+        })[0];
+        if (!tBox || tBox.textContent.indexOf(cFeat) < 0) throw new Error('target success missing explanation');
+        if (!/條邊|曲面/.test(tBox.textContent)) throw new Error('target success missing geometric reason');
+      });
+
       // 4. 切割：所有模式 + 切割 + 印章 + 題型
       check('cut all modes', function () {
         A._test.go('cut'); st.shape = 'cube';
