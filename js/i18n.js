@@ -7,6 +7,20 @@
   'use strict';
 
   var DICT = {
+    /* ---------- 立體特徵（所有提示與解釋都以這些特徵為依據） ---------- */
+    'solid.feature.cube': { zh: '正方體有 6 個相同的正方形面、12 條棱、8 個頂點。', en: 'A cube has 6 identical square faces, 12 edges and 8 vertices.' },
+    'solid.feature.cuboid': { zh: '長方體有 6 個長方形面（對面相同）、12 條棱、8 個頂點。', en: 'A cuboid has 6 rectangular faces (opposite faces are equal), 12 edges and 8 vertices.' },
+    'solid.feature.triPrism': { zh: '三角柱有 2 個三角形底面和 3 個長方形側面，共 5 個面、9 條棱、6 個頂點。', en: 'A triangular prism has 2 triangular bases and 3 rectangular sides: 5 faces, 9 edges and 6 vertices.' },
+    'solid.feature.quadPrism': { zh: '四角柱有 2 個四邊形底面和 4 個長方形側面，共 6 個面、12 條棱、8 個頂點。', en: 'A quadrilateral prism has 2 quadrilateral bases and 4 rectangular sides: 6 faces, 12 edges and 8 vertices.' },
+    'solid.feature.pentaPrism': { zh: '五角柱有 2 個五邊形底面和 5 個長方形側面，共 7 個面、15 條棱、10 個頂點。', en: 'A pentagonal prism has 2 pentagonal bases and 5 rectangular sides: 7 faces, 15 edges and 10 vertices.' },
+    'solid.feature.hexaPrism': { zh: '六角柱有 2 個六邊形底面和 6 個長方形側面，共 8 個面、18 條棱、12 個頂點。', en: 'A hexagonal prism has 2 hexagonal bases and 6 rectangular sides: 8 faces, 18 edges and 12 vertices.' },
+    'solid.feature.triPyramid': { zh: '三角錐有 1 個三角形底面和 3 個三角形側面，共 4 個面、6 條棱、4 個頂點。', en: 'A triangular pyramid has 1 triangular base and 3 triangular sides: 4 faces, 6 edges and 4 vertices.' },
+    'solid.feature.quadPyramid': { zh: '四角錐有 1 個四邊形底面和 4 個三角形側面，共 5 個面、8 條棱、5 個頂點。', en: 'A square pyramid has 1 quadrilateral base and 4 triangular sides: 5 faces, 8 edges and 5 vertices.' },
+    'solid.feature.pentaPyramid': { zh: '五角錐有 1 個五邊形底面和 5 個三角形側面，共 6 個面、10 條棱、6 個頂點。', en: 'A pentagonal pyramid has 1 pentagonal base and 5 triangular sides: 6 faces, 10 edges and 6 vertices.' },
+    'solid.feature.cylinder': { zh: '圓柱有 2 個圓形平面（上、下）和 1 個曲面（側面），共 3 個面；圓形的邊是曲線，不是直棱。', en: 'A cylinder has 2 circular flat faces (top and bottom) and 1 curved side: 3 faces. Its circular rims are curves, not straight edges.' },
+    'solid.feature.cone': { zh: '圓錐有 1 個圓形底面和 1 個曲面（側面），共 2 個面；尖頂是 1 個頂點，底圓的邊是曲線。', en: 'A cone has 1 circular base and 1 curved side: 2 faces. The apex is 1 vertex and the rim of the base is a curve.' },
+    'solid.feature.sphere': { zh: '球體整個表面都是曲面：沒有平面、沒有棱、也沒有頂點。', en: 'A sphere is all curved surface: no flat faces, no edges and no vertices.' },
+
     /* ---------- 導覽 ---------- */
     'app.name': { zh: '立體探秘樂', en: 'Peek-a-Shape' },
     'app.title': { zh: '立體探秘樂｜Peek-a-Shape', en: 'Peek-a-Shape' },
@@ -98,11 +112,11 @@
     'unfold.quiz.showCorrectFold': { zh: '看正確答案的摺合動畫', en: 'Show the correct net folding' },
     'unfold.quiz.pickOne': { zh: '選一個展開圖：', en: 'Pick a net:' },
     'unfold.quiz.netLabel': { zh: '展開圖 {0}', en: 'Net {0}' },
-    // 第一次答錯：只給提示，不揭示答案
-    'unfold.quiz.hintOverlap': { zh: '提示：想像把這個展開圖摺起來——會不會有兩塊面疊在同一個位置？再找找哪一個能剛好包住立體。', en: 'Hint: imagine folding this net — would two faces land on top of each other? Look for the net that wraps the solid exactly.' },
-    'unfold.quiz.hintGap': { zh: '提示：先數一數展開圖有幾塊面，再數一數立體有幾個面——會不會少了一塊？', en: 'Hint: count the faces in the net, then count the faces of the solid — is one missing?' },
-    'unfold.quiz.hintFaces': { zh: '提示：「{0}」有 {1} 個面，展開圖也要剛好有同樣數目的面，大小和形狀都要配合。', en: 'Hint: {0} has {1} faces. The net must have exactly the same number of pieces, matching in size and shape.' },
-    'unfold.quiz.hintValidChosen': { zh: '提示：你選的這個展開圖其實可以完整摺成「{0}」，所以它不是答案。再找找哪一個不行。', en: 'Hint: the net you chose does fold into {0}, so it is not the answer. Look for the one that does not.' },
+    // 第一次答錯：只給提示（以目標立體自身的特徵引導），不揭示答案
+    'unfold.quiz.hintOverlapFeat': { zh: '提示：{0} 你選的展開圖摺起來時有面會互相重疊——先數一數它的面數和形狀，再找一個能剛好包住這個立體的。', en: 'Hint: {0} The net you chose would overlap itself when folded — count its faces and name their shapes, then find the net that wraps the solid exactly.' },
+    'unfold.quiz.hintGapFeat': { zh: '提示：{0} 你選的展開圖摺起來會留下缺口——先看看它有沒有齊全的面，大小是否配合。', en: 'Hint: {0} The net you chose leaves a gap when folded — check that every face of the solid is there and the right size.' },
+    'unfold.quiz.hintFacesFeat': { zh: '提示：{0} 先數一數你選的展開圖有幾塊面、是甚麼形狀，再跟這個立體的特徵比較。', en: 'Hint: {0} Count the pieces in the net you chose and name their shapes, then compare them with this solid.' },
+    'unfold.quiz.hintValidFeat': { zh: '提示：{0} 你選的這個展開圖其實可以完整摺成它，所以不是答案——再找找哪一個的面數或形狀跟它不符。', en: 'Hint: {0} The net you chose actually folds into it completely, so it is not the answer. Look for the one whose faces do not match.' },
     'unfold.quiz.hintTryAgain': { zh: '再想一想，然後再選一次。', en: 'Think again, then choose once more.' },
     // 第二次答錯：揭示答案 + 解釋
     'unfold.quiz.answerReveal': { zh: '正確答案是 {0}。', en: 'The correct answer is {0}.' },
@@ -144,10 +158,11 @@
     'cut.position': { zh: '位置', en: 'Position' },
     'cut.quiz.title': { zh: '切割大考驗', en: 'Cut challenge' },
     // 提示（rule-based，全部由幾何計算得出）
-    'cut.modeHint.horizontal': { zh: '提示：水平切與底面平行，截面會跟底面同一個形狀（大小可能不同）。先想一想這個立體的底面是甚麼形狀。', en: 'Hint: a horizontal cut is parallel to the base, so the section has the same shape as the base (maybe a different size). First think what shape the base is.' },
-    'cut.modeHint.vertical': { zh: '提示：垂直切會由頂到底貫穿立體，先想一想切面會穿過哪些部分、邊界是直線還是曲線。', en: 'Hint: a vertical cut runs from top to bottom. Think about which parts it passes through and whether the boundary is straight or curved.' },
-    'cut.modeHint.slant': { zh: '提示：斜切會把切面拉長——圓形的立體會切成橢圓，多邊形的立體會切成拉長的長方形或平行四邊形。', en: 'Hint: a slanted cut stretches the section. Round solids give an ellipse; flat-faced solids give a stretched rectangle or parallelogram.' },
-    'cut.modeHint.diagonal': { zh: '提示：對角切沿對角方向穿過立體，會比水平切和垂直切都切得更長。', en: 'Hint: a diagonal cut runs corner-to-corner, so it cuts a longer section than a horizontal or vertical cut.' },
+    'cut.hintPrefix': { zh: '提示：{0}', en: 'Hint: {0}' },
+    'cut.modeHint.horizontal': { zh: '水平切與底面平行，截面會跟底面同一個形狀（大小可能不同）。先想一想它的底面是甚麼形狀。', en: 'a horizontal cut is parallel to the base, so the section has the same shape as the base (maybe a different size). First think what shape its base is.' },
+    'cut.modeHint.vertical': { zh: '垂直切由頂到底貫穿；如果刀面切過曲面，截面的邊界就會有曲線。先想一想這一刀會穿過哪些面。', en: 'a vertical cut runs from top to bottom. If the plane passes through the curved surface, the boundary of the section becomes curved. Think about which faces this cut passes through.' },
+    'cut.modeHint.slant': { zh: '斜切與底面斜交，截面會被拉長；切到曲面（例如圓柱、圓錐的側面）就會變成橢圓。', en: 'a slanted cut meets the base at an angle and stretches the section; cutting a curved surface (such as the side of a cylinder or cone) gives an ellipse.' },
+    'cut.modeHint.diagonal': { zh: '對角切沿對角方向穿過，會比水平、垂直切更長，也會穿過更多面。', en: 'a diagonal cut runs corner-to-corner, so it is longer than a horizontal or vertical cut and passes through more faces.' },
     'cut.predict.reveal': { zh: '正確答案是{0}。', en: 'The correct answer is {0}.' },
     'cut.predict.hintAgain': { zh: '再想一想，然後再按「切下去」。', en: 'Think again, then press "Cut".' },
     'cut.whySides': { zh: '截面的邊界由 {0} 條邊圍成，所以是{1}。', en: 'The boundary of this section is made of {0} edges, so it is {1}.' },
@@ -156,8 +171,8 @@
     'cut.quiz.matchReveal': { zh: '正確答案：截面是{0}。', en: 'Answer: the section is {0}.' },
     'cut.quiz.judgeReveal': { zh: '正確答案：「{0}」，截面是{1}。', en: 'Answer: "{0}" — the section is {1}.' },
     'cut.quiz.correctSection': { zh: '截面是{0}。', en: 'The cross-section is {0}.' },
-    'cut.quiz.targetHint1': { zh: '提示：先想想目標形狀有幾條邊，再試試另一種切法——不同切法會切出不同邊數的截面。', en: 'Hint: count the edges of the target shape, then try another cut direction — different cuts give sections with different numbers of edges.' },
-    'cut.quiz.targetAnswer': { zh: '正確做法：用「{0}」，把位置滑桿調到 {1}，就會切出{2}。', en: 'The answer: use "{0}" and set the position slider to {1}; that makes a {2}.' },
+    'cut.quiz.targetHint1': { zh: '提示：{0} 目標是{1}——先數一數目標形狀有幾條邊，再試試另一種切法。', en: 'Hint: {0} The target is {1} — count the edges of the target, then try another cut direction.' },
+    'cut.quiz.targetAnswer': { zh: '正確做法：用「{0}」，把位置滑桿調到 {1}，就會切出{2}。', en: 'The answer: use "{0}" and set the position slider to {1}; that makes {2}.' },
     'cut.quiz.targetHint2': { zh: '這個立體要用另一種切法才做得到，四個切法都試試看。', en: 'This solid needs a different cut direction — try all four.' },
     'quiz.true': { zh: '對', en: 'True' },
     'quiz.false': { zh: '不對', en: 'False' },

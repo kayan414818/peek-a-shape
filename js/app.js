@@ -23,6 +23,8 @@
   function txt(k) { return T.t(k); }
   function tf(k, a) { return T.tf(k, a); }
   function shapeName(id) { return G.NAME[id][T.lang()]; }
+  // 立體自身的特徵句（提示與解釋都以它為依據）
+  function solidFeature(id) { return txt('solid.feature.' + (id || state.shape)); }
   // 英文句子中用「a / an + 小寫形狀名」，中文直接回傳名稱
   function withA(label) {
     if (T.lang() !== 'en') return label;
@@ -618,7 +620,7 @@
         q.options.forEach(function (o) { if (o.correct) right = o; });
         card.appendChild(el('button', { class: 'btn teal block', text: txt('unfold.quiz.showCorrectFold') + ' ▶', onclick: function () { if (right) { markActivity(); playFold(right.net, right.id); } } }));
       }
-      card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); state.unfold.quiz = null; render(); } }));
+      card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); newUnfoldQuiz(); } }));   // 直接跳去下一題
     }
     return card;
   }
@@ -631,17 +633,18 @@
     var correct = null;
     q.options.forEach(function (o) { if (o.correct) correct = o; });
     if (!correct) return '';
+    var feat = solidFeature(q.target);   // 先用目標立體自身的特徵說明
     if (q.correctAnswer) {
-      if (q.type === 'invalid') return explainInvalidNet(chosen.res);   // 答對：解釋為甚麼這個摺不成
-      return txt('unfold.quiz.explainOk');
+      if (q.type === 'invalid') return feat + ' ' + explainInvalidNet(chosen.res);   // 答對：解釋為甚麼這個摺不成
+      return feat + ' ' + txt('unfold.quiz.explainOk');
     }
-    // 第二次答錯：先講正確答案，再解釋（為甚麼錯、為甚麼對）
+    // 第二次答錯：先講正確答案，再以立體特徵解釋（為甚麼錯、為甚麼對）
     var head = tf('unfold.quiz.answerReveal', [correct.letter]);
     if (q.type === 'invalid') {
-      return head + ' ' + tf('unfold.quiz.chosenFolds', [chosen.letter || '']) + ' ' +
+      return head + ' ' + feat + ' ' + tf('unfold.quiz.chosenFolds', [chosen.letter || '']) + ' ' +
         tf('unfold.quiz.correctNotFolds', [correct.letter, netReason(correct.res)]);
     }
-    return head + ' ' + tf('unfold.quiz.chosenNotFolds', [chosen.letter || '', netReason(chosen.res)]) + ' ' +
+    return head + ' ' + feat + ' ' + tf('unfold.quiz.chosenNotFolds', [chosen.letter || '', netReason(chosen.res)]) + ' ' +
       tf('unfold.quiz.correctFolds', [correct.letter]);
   }
 
@@ -732,17 +735,14 @@
     return txt('unfold.quiz.rWrong');
   }
 
-  function faceCountOf(id) {
-    try { return G.info(id).counts.faces; } catch (e) { return 0; }
-  }
-
-  // 第一次答錯的提示：只引導方向，不指出哪一個才是答案
+  // 第一次答錯的提示：以目標立體自身的特徵引導，不指出哪一個才是答案
   function unfoldHint(q, chosen) {
-    if (q.type === 'invalid') return tf('unfold.quiz.hintValidChosen', [withA(shapeName(q.target))]);
+    var feat = solidFeature(q.target);
+    if (q.type === 'invalid') return tf('unfold.quiz.hintValidFeat', [feat]);
     var res = chosen.res || {};
-    if (res.overlaps && res.overlaps.length) return txt('unfold.quiz.hintOverlap');
-    if (res.watertight === false) return txt('unfold.quiz.hintGap');
-    return tf('unfold.quiz.hintFaces', [withA(shapeName(q.target)), String(faceCountOf(q.target))]);
+    if (res.overlaps && res.overlaps.length) return tf('unfold.quiz.hintOverlapFeat', [feat]);
+    if (res.watertight === false) return tf('unfold.quiz.hintGapFeat', [feat]);
+    return tf('unfold.quiz.hintFacesFeat', [feat]);
   }
 
   function answerUnfold(i) {
@@ -984,7 +984,7 @@
         } else {
           // 第二次都答錯（或原本已看過答案）：揭示正確答案並解釋
           card.appendChild(el('div', { class: 'feedback no',
-            text: tf('cut.predict.reveal', [withA(label)]) + ' ' + sectionWhy(sec.key) }));
+            text: tf('cut.predict.reveal', [withA(label)]) + ' ' + solidFeature() + ' ' + sectionWhy(sec.key) }));
         }
       }
     }
@@ -1006,7 +1006,7 @@
     if (!p.showResult && p.predicted && secOk && !predMatches(p.predicted, sec.key)) {
       if ((p.predAttempts || 0) < 1) {
         p.predAttempts = 1;
-        p.predHint = txt('cut.modeHint.' + p.mode);
+        p.predHint = tf('cut.hintPrefix', [solidFeature()]) + ' ' + txt('cut.modeHint.' + p.mode);
         render();
         return;
       }
@@ -1019,7 +1019,7 @@
       cq.attempts = (cq.attempts || 0) + 1;
       cq.hint = (cq.attempts >= 2)
         ? targetAnswerHint(solid, cq.target)
-        : txt('cut.quiz.targetHint1');
+        : tf('cut.quiz.targetHint1', [solidFeature(), withA(shapeLabel(cq.target))]);
     }
 
     p.showResult = true;
@@ -1105,11 +1105,11 @@
     if (q.type === 'target') {
       if (q.answered) {
         card.appendChild(el('div', { class: 'feedback ok', text: cutExplain(q) }));
-        card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); state.cut.quiz = null; render(); } }));
+        card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); newCutQuiz(); } }));   // 直接跳去下一題
       } else {
         card.appendChild(el('div', { class: 'note', text: txt('cut.targetHint') }));
         if (q.hint) card.appendChild(el('div', { class: 'feedback hint', text: q.hint }));
-        card.appendChild(el('button', { class: 'btn ghost block', text: txt('common.next'), onclick: function () { markActivity(); state.cut.quiz = null; render(); } }));
+        card.appendChild(el('button', { class: 'btn ghost block', text: txt('common.next'), onclick: function () { markActivity(); newCutQuiz(); } }));   // 直接跳去下一題
       }
       return card;
     }
@@ -1128,7 +1128,7 @@
     }
     if (q.answered) {
       card.appendChild(el('div', { class: 'feedback ' + (q.correctAnswer ? 'ok' : 'no'), text: cutExplain(q) }));
-      card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); state.cut.quiz = null; render(); } }));
+      card.appendChild(el('button', { class: 'btn orange block', text: txt('common.next'), onclick: function () { markActivity(); newCutQuiz(); } }));   // 直接跳去下一題
     }
     return card;
   }
@@ -1146,12 +1146,13 @@
     return shapeLabel(o.key);
   }
   function cutExplain(q) {
+    var feat = solidFeature();   // 解釋以這個立體自身的特徵為依據
     if (q.type === 'target') {
       if (!q.target) return txt('status.geometry');
-      return tf('cut.targetDone', [withA(shapeLabel(q.target))]) + (q.answered && q.correctAnswer ? '　' + txt('q.correct') : '');
+      return feat + ' ' + tf('cut.targetDone', [withA(shapeLabel(q.target))]) + (q.answered && q.correctAnswer ? '　' + txt('q.correct') : '');
     }
     if (q.correctAnswer) {
-      return txt('q.correct') + ' ' + tf('cut.quiz.correctSection', [withA(shapeLabel(q.answerKey))]) + ' ' + sectionWhy(q.answerKey);
+      return txt('q.correct') + ' ' + tf('cut.quiz.correctSection', [withA(shapeLabel(q.answerKey))]) + ' ' + feat + ' ' + sectionWhy(q.answerKey);
     }
     // 第二次答錯：揭示答案 + 解釋（為甚麼是這個形狀）
     var truth = true;
@@ -1159,7 +1160,7 @@
     var head = (q.type === 'judge')
       ? tf('cut.quiz.judgeReveal', [txt(truth ? 'quiz.true' : 'quiz.false'), withA(shapeLabel(q.answerKey))])
       : tf('cut.quiz.matchReveal', [withA(shapeLabel(q.answerKey))]);
-    return head + ' ' + sectionWhy(q.answerKey);
+    return head + ' ' + feat + ' ' + sectionWhy(q.answerKey);
   }
 
   function candidateCuts(solid) {
@@ -1208,7 +1209,7 @@
     cands.forEach(function (c) { if (!hit && targetMatch(target, c.key)) hit = c; });
     if (!hit) return txt('cut.quiz.targetHint2');
     return tf('cut.quiz.targetAnswer', [
-      txt('cut.mode.' + hit.mode), String(Math.round(hit.pos * 100)), shapeLabel(target)
+      txt('cut.mode.' + hit.mode), String(Math.round(hit.pos * 100)), withA(shapeLabel(target))
     ]);
   }
 
@@ -1228,6 +1229,8 @@
     }
     var kinds = ['match', 'judge', 'target'];
     var kind = kinds[Math.floor(Math.random() * 3)];
+    // 新一題一律由未切開的平面預覽開始
+    state.cut.showResult = false; state.cut.sep = 0; state.cut.predHint = null;
 
     if (kind === 'target') {
       // 目標挑戰：請調整切法，切出指定形狀
@@ -1301,7 +1304,7 @@
 
     if (q.attempts < 2) {
       // 第一次答錯：只給提示（按切法給幾何線索），不揭示答案
-      q.hint = txt('cut.modeHint.' + (q.mode || state.cut.mode));
+      q.hint = tf('cut.hintPrefix', [solidFeature()]) + ' ' + txt('cut.modeHint.' + (q.mode || state.cut.mode));
       render();
       return;
     }

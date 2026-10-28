@@ -261,6 +261,113 @@
         });
       }
 
+      // 提示與解釋必須引用立體自身的特徵（面數／棱／頂點／曲面）
+      check('solid feature sentences match geometry counts', function () {
+        ['cube', 'cuboid', 'triPrism', 'quadPrism', 'pentaPrism', 'hexaPrism',
+          'triPyramid', 'quadPyramid', 'pentaPyramid'].forEach(function (id) {
+          var c = PS.geo.info(id).counts;
+          ['zh', 'en'].forEach(function (lang) {
+            var s2 = PS.i18n.t('solid.feature.' + id, lang);
+            [c.faces, c.edges, c.vertices].forEach(function (n) {
+              if (s2.indexOf(String(n)) < 0) throw new Error(id + '/' + lang + ' feature missing count ' + n + ': ' + s2);
+            });
+          });
+        });
+        ['cylinder', 'cone', 'sphere'].forEach(function (id) {
+          ['zh', 'en'].forEach(function (lang) {
+            var s2 = PS.i18n.t('solid.feature.' + id, lang);
+            if (!s2 || s2.length < 10) throw new Error(id + '/' + lang + ' feature missing');
+            if (!/曲面|curved/i.test(s2)) throw new Error(id + '/' + lang + ' feature should mention curved surface: ' + s2);
+          });
+        });
+      });
+
+      check('unfold quiz hint + reveal use solid features', function () {
+        A._test.go('unfold'); st.shape = 'cube'; st.unfold.quiz = null; A._test.render();
+        A._test.newUnfoldQuiz();
+        var q = st.unfold.quiz;
+        if (!q) throw new Error('no net quiz');
+        var feat = PS.i18n.t('solid.feature.' + q.target, 'zh');
+        if (!feat) throw new Error('no feature text for ' + q.target);
+        var wi = -1; q.options.forEach(function (o, i) { if (!o.correct) wi = i; });
+        A._test.answerUnfold(wi);
+        if (q.answered) throw new Error('first wrong must not reveal');
+        if (!q.hint || q.hint.indexOf(feat) < 0) throw new Error('hint ignored solid features: ' + q.hint);
+        var wi2 = -1; q.options.forEach(function (o, i) { if (!o.correct && i !== wi) wi2 = i; });
+        A._test.answerUnfold(wi2);
+        if (!q.answered) throw new Error('second wrong should reveal');
+        var rv = document.querySelector('#panel .feedback.no');
+        if (!rv || rv.textContent.indexOf(feat) < 0) throw new Error('reveal ignored solid features: ' + (rv ? rv.textContent : 'none'));
+      });
+
+      check('cut quiz hint + reveal use solid features', function () {
+        A._test.go('cut'); st.shape = 'cube'; st.cut.quiz = null; st.cut.showResult = false; A._test.render();
+        var feat = PS.i18n.t('solid.feature.cube', 'zh');
+        var q = null;
+        for (var k = 0; k < 40 && !q; k++) {
+          A._test.newCutQuiz();
+          if (st.cut.quiz.type === 'match') q = st.cut.quiz;
+        }
+        if (!q) throw new Error('no match cut quiz');
+        var wi = -1; q.options.forEach(function (o, i) { if (!o.correct) wi = i; });
+        A._test.answerCut(wi);
+        if (q.answered) throw new Error('first wrong must not reveal');
+        if (!q.hint || q.hint.indexOf(feat) < 0) throw new Error('cut hint ignored solid features: ' + q.hint);
+        var wi2 = -1; q.options.forEach(function (o, i) { if (!o.correct && i !== wi) wi2 = i; });
+        A._test.answerCut(wi2);
+        if (!q.answered) throw new Error('second wrong should reveal');
+        var rv = document.querySelector('#panel .feedback.no');
+        if (!rv || rv.textContent.indexOf(feat) < 0) throw new Error('cut reveal ignored solid features: ' + (rv ? rv.textContent : 'none'));
+
+        // 先猜一猜：第一次錯只給提示（不切開），第二次錯才切開並揭示
+        st.cut.quiz = null; st.cut.showResult = false; st.cut.predicted = null;
+        st.cut.predAttempts = 0; st.cut.predHint = null;
+        st.cut.mode = 'horizontal'; st.cut.pos = 0; A._test.render();
+        var actualKey = st.cut.section && st.cut.section.key;
+        if (!st.cut.result || !actualKey) throw new Error('cube cut result missing');
+        st.cut.predicted = (actualKey === 'circle') ? 'triangle' : 'circle';
+        A._test.doCut();
+        if (st.cut.showResult) throw new Error('first wrong prediction must not cut');
+        if (!st.cut.predHint || st.cut.predHint.indexOf(feat) < 0) throw new Error('prediction hint ignored solid features: ' + st.cut.predHint);
+        A._test.doCut();
+        if (!st.cut.showResult) throw new Error('second wrong prediction should cut');
+        var rv2 = document.querySelector('#panel .feedback.no');
+        if (!rv2 || rv2.textContent.indexOf(feat) < 0) throw new Error('prediction reveal ignored solid features: ' + (rv2 ? rv2.textContent : 'none'));
+      });
+
+      check('quiz next button starts a new question directly', function () {
+        A._test.go('unfold'); st.shape = 'cube'; st.unfold.quiz = null; A._test.render();
+        A._test.newUnfoldQuiz();
+        var q1 = st.unfold.quiz;
+        var ci = -1; q1.options.forEach(function (o, i) { if (o.correct) ci = i; });
+        A._test.answerUnfold(ci);
+        if (!q1.answered) throw new Error('quiz should be answered');
+        var btn = Array.prototype.filter.call(document.querySelectorAll('#panel .btn'), function (b) {
+          return /下一題|Next/i.test(b.textContent);
+        })[0];
+        if (!btn) throw new Error('no next button after answering');
+        btn.click();
+        if (!st.unfold.quiz || st.unfold.quiz === q1) throw new Error('next should create a new net quiz');
+        if (st.unfold.quiz.answered) throw new Error('new net quiz should be unanswered');
+        if (!document.querySelector('#panel .options.nets')) throw new Error('new net quiz options not rendered');
+
+        A._test.go('cut'); st.shape = 'cube'; st.cut.quiz = null; A._test.render();
+        A._test.newCutQuiz();
+        var cq = st.cut.quiz;
+        if (cq.type !== 'target') {
+          var cci = -1; cq.options.forEach(function (o, i) { if (o.correct) cci = i; });
+          A._test.answerCut(cci);
+          if (!cq.answered) throw new Error('cut quiz should be answered');
+        }
+        var nx = Array.prototype.filter.call(document.querySelectorAll('#panel .btn'), function (b) {
+          return /下一題|Next/i.test(b.textContent);
+        })[0];
+        if (!nx) throw new Error('no cut next button');
+        nx.click();
+        if (!st.cut.quiz || st.cut.quiz === cq) throw new Error('cut next should create a new quiz directly');
+        if (st.cut.quiz.type !== 'target' && st.cut.quiz.answered) throw new Error('new cut quiz should be unanswered');
+      });
+
       // 4. 切割：所有模式 + 切割 + 印章 + 題型
       check('cut all modes', function () {
         A._test.go('cut'); st.shape = 'cube';
